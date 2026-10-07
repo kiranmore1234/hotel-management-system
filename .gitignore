@@ -1,0 +1,28 @@
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+**/secrets.json
+
+# Local database and generated backend output
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/bin/
+**/obj/
+
+# Frontend dependencies and generated files
+**/node_modules/
+**/.next/
+**/out/
+**/*.tsbuildinfo
+frontend/next-env.d.ts
+frontend/AGENTS.md
+frontend/CLAUDE.md
+
+# Local editor and operating-system files
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
