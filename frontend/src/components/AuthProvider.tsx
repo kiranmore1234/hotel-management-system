@@ -26,7 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    const token = window.localStorage.getItem("bramhand_token");
+    const token = window.localStorage.getItem("niyojan_token");
     if (!token) {
       setLoading(false);
       return () => {

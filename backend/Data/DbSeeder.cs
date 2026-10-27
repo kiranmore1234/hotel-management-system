@@ -9,6 +9,59 @@ public static class DbSeeder
     public static async Task SeedAsync(AppDbContext db)
     {
         await db.Database.EnsureCreatedAsync();
+        await EnsureUserJobTitleColumnAsync(db);
+        var restaurantSettings = await db.Settings.FirstOrDefaultAsync();
+        if (restaurantSettings is not null)
+        {
+            var changed = false;
+            if (restaurantSettings.RestaurantName != "Niyojan Resto")
+            {
+                restaurantSettings.RestaurantName = "Niyojan Resto";
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(restaurantSettings.Address))
+            {
+                restaurantSettings.Address = "Laxmi Chowk Hinjewadi Pune";
+                changed = true;
+            }
+            if (string.IsNullOrWhiteSpace(restaurantSettings.Phone))
+            {
+                restaurantSettings.Phone = "8488848987";
+                changed = true;
+            }
+            if (string.IsNullOrWhiteSpace(restaurantSettings.Gstin))
+            {
+                restaurantSettings.Gstin = "3243";
+                changed = true;
+            }
+            if (restaurantSettings.DefaultCgstPercent == 2.5m && restaurantSettings.DefaultSgstPercent == 2.5m)
+            {
+                restaurantSettings.DefaultCgstPercent = 5m;
+                restaurantSettings.DefaultSgstPercent = 5m;
+                changed = true;
+            }
+
+            if (changed)
+                await db.SaveChangesAsync();
+        }
+
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "StaffAttendance" (
+                "Id" INTEGER NOT NULL CONSTRAINT "PK_StaffAttendance" PRIMARY KEY AUTOINCREMENT,
+                "UserId" INTEGER NOT NULL,
+                "WorkDate" TEXT NOT NULL,
+                "Status" TEXT NOT NULL,
+                "CheckIn" TEXT NULL,
+                "CheckOut" TEXT NULL,
+                "Notes" TEXT NULL,
+                "RecordedByUserId" INTEGER NOT NULL,
+                CONSTRAINT "FK_StaffAttendance_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
+                CONSTRAINT "FK_StaffAttendance_Users_RecordedByUserId" FOREIGN KEY ("RecordedByUserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_StaffAttendance_UserId_WorkDate"
+                ON "StaffAttendance" ("UserId", "WorkDate");
+            """);
         await SeedRegionalMenuAsync(db);
         await DeactivateNonVegAndEggMenuAsync(db);
 
@@ -90,18 +143,51 @@ public static class DbSeeder
 
         db.Settings.Add(new RestaurantSettings
         {
-            RestaurantName = "Bramhand",
-            Address = "Main Road, India",
-            Phone = "1800-000-000",
-            Gstin = "22AAAAA0000A1Z5",
-            DefaultCgstPercent = 2.5m,
-            DefaultSgstPercent = 2.5m,
+            RestaurantName = "Niyojan Resto",
+            Address = "Laxmi Chowk Hinjewadi Pune",
+            Phone = "8488848987",
+            Gstin = "3243",
+            DefaultCgstPercent = 5m,
+            DefaultSgstPercent = 5m,
             ServiceChargePercent = 0,
-            BillPrefix = "BH"
+            BillPrefix = "NR"
         });
 
         await db.SaveChangesAsync();
         await AddMissingMenuImagesAsync(db);
+    }
+
+    private static async Task EnsureUserJobTitleColumnAsync(AppDbContext db)
+    {
+        var connection = db.Database.GetDbConnection();
+        var closeConnection = connection.State != System.Data.ConnectionState.Open;
+        if (closeConnection)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(\"Users\")";
+            await using var reader = await command.ExecuteReaderAsync();
+            var hasJobTitle = false;
+            while (await reader.ReadAsync())
+            {
+                if (reader.GetString(1) == "JobTitle")
+                {
+                    hasJobTitle = true;
+                    break;
+                }
+            }
+
+            await reader.DisposeAsync();
+            if (!hasJobTitle)
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Users\" ADD COLUMN \"JobTitle\" TEXT NULL");
+        }
+        finally
+        {
+            if (closeConnection)
+                await connection.CloseAsync();
+        }
     }
 
     private static async Task SeedRegionalMenuAsync(AppDbContext db)
@@ -127,7 +213,8 @@ public static class DbSeeder
             new { CategoryId = maharashtrian.Id, Name = "Misal Pav", Description = "Sprouted bean curry with farsan and pav.", Price = 160m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=80" },
             new { CategoryId = maharashtrian.Id, Name = "Vada Pav", Description = "Spiced potato fritter in a soft pav.", Price = 60m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=80" },
             new { CategoryId = maharashtrian.Id, Name = "Puran Poli", Description = "Sweet lentil-stuffed flatbread.", Price = 90m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = maharashtrian.Id, Name = "Bharli Vangi", Description = "Stuffed brinjal in a Maharashtrian masala.", Price = 190m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80" },
+            new { CategoryId = maharashtrian.Id, Name = "Vada Pav", Description = "Mumbai-style potato fritter tucked into a soft pav.", Price = 60m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=900&q=80" },
+            new { CategoryId = maharashtrian.Id, Name = "Mix Veg", Description = "Seasonal vegetables cooked with a Maharashtrian masala.", Price = 190m, VegType = VegType.Veg, ImageUrl = "" },
             new { CategoryId = maharashtrian.Id, Name = "Zunka Bhakri", Description = "Gram-flour zunka served with jowar bhakri.", Price = 150m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80" },
             new { CategoryId = maharashtrian.Id, Name = "Kolhapuri Chicken", Description = "Chicken in a bold Kolhapuri spice gravy.", Price = 290m, VegType = VegType.NonVeg, ImageUrl = "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=900&q=80" },
             new { CategoryId = southIndian.Id, Name = "Idli Sambar", Description = "Steamed rice cakes with sambar and chutney.", Price = 100m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=900&q=80" },

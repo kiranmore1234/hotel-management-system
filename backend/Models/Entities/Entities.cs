@@ -8,6 +8,7 @@ public class User
     public string Name { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    public string? JobTitle { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
     public string? PinHash { get; set; }
     public UserRole Role { get; set; }
@@ -157,10 +158,25 @@ public class AuditLog
     public User? User { get; set; }
 }
 
+public class StaffAttendance
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public DateTime WorkDate { get; set; }
+    public string Status { get; set; } = "Absent";
+    public DateTime? CheckIn { get; set; }
+    public DateTime? CheckOut { get; set; }
+    public string? Notes { get; set; }
+    public int RecordedByUserId { get; set; }
+
+    public User User { get; set; } = null!;
+    public User RecordedByUser { get; set; } = null!;
+}
+
 public class RestaurantSettings
 {
     public int Id { get; set; }
-    public string RestaurantName { get; set; } = "Bramhand";
+    public string RestaurantName { get; set; } = "Niyojan Resto";
     public string? Address { get; set; }
     public string? Phone { get; set; }
     public string? Gstin { get; set; }
@@ -169,5 +185,5 @@ public class RestaurantSettings
     public decimal DefaultSgstPercent { get; set; } = 2.5m;
     public decimal ServiceChargePercent { get; set; }
     public string Currency { get; set; } = "INR";
-    public string BillPrefix { get; set; } = "BH";
+    public string BillPrefix { get; set; } = "NR";
 }

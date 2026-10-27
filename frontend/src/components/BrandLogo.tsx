@@ -12,7 +12,7 @@ export function BrandLogo({
   return (
     <span className="flex min-w-0 items-center gap-3">
       <Image
-        src="/bramhand-mark.svg"
+        src="/niyojan-mark.svg"
         alt=""
         width={compact ? 40 : 48}
         height={compact ? 40 : 48}
@@ -22,9 +22,6 @@ export function BrandLogo({
       <span className="min-w-0">
         <span className={`block truncate font-display text-[17px] font-semibold tracking-wide ${tone === "dark" ? "text-[#f4e7ce]" : "text-[#18352c]"}`}>
           {name}
-        </span>
-        <span className={`block truncate text-[9px] font-medium uppercase tracking-[0.16em] ${tone === "dark" ? "text-[#c8a36c]" : "text-[#936b3f]"}`}>
-          Hotel &amp; Restaurant
         </span>
       </span>
     </span>

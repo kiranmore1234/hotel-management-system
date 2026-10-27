@@ -6,7 +6,7 @@ import type {
   OrderDto,
 } from "@/types";
 
-const TOKEN_KEY = "bramhand_token";
+const TOKEN_KEY = "niyojan_token";
 
 export function getApiBase(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL;

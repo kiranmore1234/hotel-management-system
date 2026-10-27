@@ -11,7 +11,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [restaurantName, setRestaurantName] = useState("Bramhand");
+  const [restaurantName, setRestaurantName] = useState("Niyojan Resto");
 
   useEffect(() => {
     if (!user) return;

@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f5ef;
-  --foreground: #26342c;
-  --accent: #bd8b4d;
-  --accent-dark: #9a6a31;
-  --header: #18352c;
+  --background: #fbf8f1;
+  --foreground: #21372d;
+  --accent: #d8a85d;
+  --accent-dark: #a36f32;
+  --header: #173d32;
 }
 
 @theme inline {
@@ -55,7 +55,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #bd8b4d;
+  outline: 2px solid #d8a85d;
   outline-offset: 3px;
 }
 

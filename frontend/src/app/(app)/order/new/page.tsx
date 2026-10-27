@@ -290,12 +290,20 @@ export default function NewOrderPage({
             </p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleItems.map((item) => (
+              {visibleItems.map((item) => {
+                const photoUrl = getDishPhoto(item);
+                return (
                 <article key={item.id} className="food-card lift-card overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e8e3d8]">
-                  <div className="relative overflow-hidden">
-                    <Image src={getDishPhoto(item)} alt={item.name} width={900} height={506} unoptimized className="food-image aspect-[16/9] w-full object-cover" />
-                    <span className="absolute bottom-3 right-3 rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-[#26342c] shadow">{formatCurrency(item.price)}</span>
-                  </div>
+                  {photoUrl ? (
+                    <div className="relative overflow-hidden">
+                      <Image src={photoUrl} alt={item.name} width={900} height={506} unoptimized className="food-image aspect-[16/9] w-full object-cover" />
+                      <span className="absolute bottom-3 right-3 rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-[#26342c] shadow">{formatCurrency(item.price)}</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-end px-4 pt-4">
+                      <span className="rounded-full bg-[#f2e8d9] px-3 py-1.5 text-sm font-bold text-[#26342c]">{formatCurrency(item.price)}</span>
+                    </div>
+                  )}
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -324,7 +332,8 @@ export default function NewOrderPage({
                   </div>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </>

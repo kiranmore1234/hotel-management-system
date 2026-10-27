@@ -1,31 +1,25 @@
-# Bramhand — Restaurant Order & Billing (POS)
+# Niyojan Resto
 
-Petpooja-style hotel/restaurant POS: tables, captain orders, KOT, billing, reports.
+A responsive restaurant website and staff management system. The customer-facing site includes the restaurant home page, menu, story, and contact pages. Staff can sign in to manage tables, menus, orders, kitchen tickets, billing, and daily activity.
+
+Both the customer-facing website and the staff operations dashboard are part of this single **Niyojan Resto** website. Staff use `/login`; guests can browse the public pages without a separate restaurant site.
 
 ## Stack
 
 | Part | Tech |
 |------|------|
-| Frontend | Next.js (PWA-ready), TypeScript, Tailwind |
+| Frontend | Next.js, TypeScript, Tailwind CSS |
 | Backend | ASP.NET Core 10 Web API |
-| Database | SQLite (dev) — easy to switch to SQL Server/PostgreSQL |
-| Auth | JWT + Role-based access (Admin / Manager / Captain) |
+| Database | SQLite |
+| Authentication | JWT with Admin / Manager / Captain roles |
 | Live updates | SignalR hub `/hubs/restaurant` |
-
-## Demo logins
-
-| Role | Username | Password | PIN |
-|------|----------|----------|-----|
-| Admin | `admin` | `admin123` | `1234` |
-| Manager | `manager` | `manager123` | `2222` |
-| Captain | `captain` | `captain123` | `1111` |
 
 ## Run locally
 
-### One-time backend development secret setup
+### Backend secret
 
-The JWT signing key is intentionally not stored in this repository. Set a local
-development key once with .NET User Secrets before starting the API:
+The JWT signing key is intentionally not stored in the repository. Set a local
+development key with .NET User Secrets:
 
 ```powershell
 dotnet user-secrets set "Jwt:Key" "<a random secret of at least 32 characters>" --project backend
@@ -36,57 +30,56 @@ manager. Never commit JWT keys, production credentials, or the local SQLite data
 
 ### Backend
 
-```bash
+```powershell
 cd backend
 dotnet run --launch-profile http
 ```
 
 API: http://localhost:5080
-OpenAPI: http://localhost:5080/openapi/v1.json
 
 ### Frontend
 
-```bash
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
-App: http://localhost:3000
+Website: http://localhost:3000
 
-## Open on a phone over Wi-Fi
+The customer-facing menu is available at `/our-menu`. The public pages are `/`,
+`/our-menu`, `/story`, and `/contact`. Staff sign in at `/login`.
 
-1. Connect the phone and the computer running Bramhand to the same Wi-Fi network.
-2. Start the backend and frontend using the commands above. The backend listens on the
-   computer's network interfaces, and the frontend's dev/start scripts are configured
-   for network access.
-3. Find the computer's Wi-Fi IPv4 address with `ipconfig` (for example, `192.168.1.26`).
-4. On the phone, open `http://<computer-wi-fi-ip>:3000` (for example,
-   `http://192.168.1.26:3000`).
-5. If Windows Firewall prompts, allow Node.js and Bramhand API on the Private network.
-   If the page does not load, allow inbound TCP ports 3000 and 5080 on the Private
-   network and try again.
+## Fresh local database
 
-The browser automatically connects to the API on the same computer address at port
-5080. This setup is for trusted local Wi-Fi; use HTTPS and a secured hosting setup
-before exposing the application outside the local network.
+The SQLite database is `backend/bramhand.db` (configured in `backend/appsettings.json`).
+To create a fresh local database, stop the backend, remove that file, then start the
+backend again. The application creates the schema and seeds a new Niyojan Resto setup
+on startup.
 
-## Phase 1 (MVP) included
+Development seed logins:
 
-- Login (password or PIN)
-- Roles & server-side RBAC
-- Floors / tables with live status colors
-- Menu (categories, veg/non-veg, half-full, stock)
-- Captain order → Send to Kitchen (KOT)
-- Add items to running order (new KOT each round)
-- Running order check
-- Billing + payment (Manager/Admin)
-- Dashboard today stats (Manager/Admin)
-- Audit log on key actions
+| Role | Username | Password | PIN |
+|------|----------|----------|-----|
+| Admin | `admin` | `admin123` | `1234` |
+| Manager | `manager` | `manager123` | `2222` |
+| Captain | `captain` | `captain123` | `1111` |
 
-## Next phases
+Change these development credentials before using the application with real data.
 
-- Kitchen Display Screen, thermal ESC/POS print
-- Full sales reports & charts
-- Table transfer/merge, bill split
-- Offline sync, WhatsApp bill, QR customer menu
+## Responsive access over Wi-Fi
+
+Connect the phone and computer to the same Wi-Fi network, start the backend and
+frontend, then open `http://<computer-wi-fi-ip>:3000` on the phone. Allow Node.js and
+the API through Windows Firewall on the Private network if prompted. This setup is
+for trusted local Wi-Fi; use HTTPS and secured hosting before exposing the application
+outside the local network.
+
+## Included staff workflows
+
+- Role-based staff sign-in using a password or PIN
+- Floors, tables, and live table status
+- Menu categories, availability, and dietary types
+- Captain orders and kitchen order tickets (KOT)
+- Running orders and billing/payment
+- Dashboard statistics and audit history

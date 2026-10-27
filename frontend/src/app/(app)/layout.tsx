@@ -12,7 +12,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { user, loading, logout, isManager } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  const [restaurantName, setRestaurantName] = useState("Bramhand");
+  const [restaurantName, setRestaurantName] = useState("Niyojan Resto");
 
   useEffect(() => {
     if (loading) return;
@@ -47,6 +47,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     ...(isManager
       ? [
           { href: "/menu", label: "Menu", icon: "≡" },
+          { href: "/reports", label: "Reports", icon: "▤" },
+          { href: "/staff", label: "Staff", icon: "♙" },
         ]
       : []),
   ];

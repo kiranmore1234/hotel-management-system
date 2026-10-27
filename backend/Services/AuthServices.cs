@@ -10,8 +10,8 @@ namespace Bramhand.Api.Services;
 public class JwtSettings
 {
     public string Key { get; set; } = string.Empty;
-    public string Issuer { get; set; } = "Bramhand";
-    public string Audience { get; set; } = "BramhandApp";
+    public string Issuer { get; set; } = "NiyojanResto";
+    public string Audience { get; set; } = "NiyojanRestoApp";
     public int ExpiryHours { get; set; } = 12;
 }
 
@@ -51,8 +51,11 @@ public static class RoleNames
     public const string Admin = nameof(UserRole.Admin);
     public const string Manager = nameof(UserRole.Manager);
     public const string Captain = nameof(UserRole.Captain);
+    public const string Waiter = nameof(UserRole.Waiter);
+    public const string Helper = nameof(UserRole.Helper);
+    public const string Chef = nameof(UserRole.Chef);
     public const string AdminOrManager = $"{Admin},{Manager}";
-    public const string AllStaff = $"{Admin},{Manager},{Captain}";
+    public const string AllStaff = $"{Admin},{Manager},{Captain},{Waiter},{Helper},{Chef}";
 }
 
 public static class ClaimsPrincipalExtensions

@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Kot> Kots => Set<Kot>();
     public DbSet<Bill> Bills => Set<Bill>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<StaffAttendance> StaffAttendance => Set<StaffAttendance>();
     public DbSet<RestaurantSettings> Settings => Set<RestaurantSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -24,6 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.Username).IsUnique();
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.Username).HasMaxLength(50);
+            e.Property(x => x.JobTitle).HasMaxLength(50);
         });
 
         modelBuilder.Entity<Floor>(e =>
@@ -91,6 +93,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.PaidAmount).HasPrecision(18, 2);
             e.HasOne(x => x.Order).WithOne(x => x.Bill).HasForeignKey<Bill>(x => x.OrderId);
             e.HasOne(x => x.PrintedByUser).WithMany().HasForeignKey(x => x.PrintedByUserId);
+        });
+
+        modelBuilder.Entity<StaffAttendance>(e =>
+        {
+            e.HasIndex(x => new { x.UserId, x.WorkDate }).IsUnique();
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.Notes).HasMaxLength(250);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.RecordedByUser).WithMany().HasForeignKey(x => x.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<RestaurantSettings>(e =>

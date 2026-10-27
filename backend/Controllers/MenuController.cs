@@ -13,6 +13,25 @@ namespace Bramhand.Api.Controllers;
 [Authorize(Roles = RoleNames.AllStaff)]
 public class MenuController(AppDbContext db, IAuditService audit) : ControllerBase
 {
+    [HttpGet("public")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<CategoryDto>>> GetPublicMenu()
+    {
+        var categories = await db.Categories
+            .Include(category => category.Items.Where(item => item.IsActive && item.IsAvailable))
+            .Where(category => category.IsActive)
+            .OrderBy(category => category.SortOrder)
+            .ToListAsync();
+
+        return Ok(categories.Select(category => new CategoryDto(
+            category.Id,
+            category.Name,
+            category.KitchenSection,
+            category.SortOrder,
+            category.Items.OrderBy(item => item.Name).Select(item => item.ToDto()).ToList()
+        )).Where(category => category.Items.Count > 0).ToList());
+    }
+
     [HttpGet]
     public async Task<ActionResult<List<CategoryDto>>> GetMenu([FromQuery] bool includeUnavailable = false)
     {

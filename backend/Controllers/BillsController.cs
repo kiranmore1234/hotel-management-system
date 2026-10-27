@@ -45,8 +45,7 @@ public class BillsController(
             discount = Math.Round(subtotal * request.DiscountPercent / 100m, 2);
 
         var afterDiscount = Math.Max(0, subtotal - discount);
-        var servicePct = request.ServiceChargePercent ?? settings.ServiceChargePercent;
-        var serviceCharge = Math.Round(afterDiscount * servicePct / 100m, 2);
+        const decimal serviceCharge = 500m;
         var taxable = afterDiscount + serviceCharge;
         var cgst = Math.Round(taxable * settings.DefaultCgstPercent / 100m, 2);
         var sgst = Math.Round(taxable * settings.DefaultSgstPercent / 100m, 2);

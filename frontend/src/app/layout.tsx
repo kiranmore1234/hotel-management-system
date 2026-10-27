@@ -9,14 +9,14 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Bramhand | Dining & Restaurant",
-  description: "A refined restaurant service and dining management experience.",
+  title: "Niyojan Resto | A Taste Worth Sharing",
+  description: "Explore the menu, discover our story, and plan your visit to Niyojan Resto.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#18352c",
+  themeColor: "#173d32",
 };
 
 export default function RootLayout({

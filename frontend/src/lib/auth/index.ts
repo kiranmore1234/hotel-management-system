@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react";
 
-export type UserRole = "Admin" | "Manager" | "Captain";
+export type UserRole = string;
 
 export type AuthUser = {
   id: number;

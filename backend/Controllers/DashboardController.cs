@@ -74,6 +74,19 @@ public class DashboardController(AppDbContext db) : ControllerBase
 [Authorize]
 public class SettingsController(AppDbContext db) : ControllerBase
 {
+    [HttpGet("public")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPublic()
+    {
+        var settings = await db.Settings.FirstAsync();
+        return Ok(new
+        {
+            settings.RestaurantName,
+            settings.Address,
+            settings.Phone,
+        });
+    }
+
     [HttpGet]
     [Authorize(Roles = RoleNames.AllStaff)]
     public async Task<IActionResult> Get()

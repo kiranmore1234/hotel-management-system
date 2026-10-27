@@ -17,7 +17,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (loading || !user) return;
-    router.replace(user.role === "Captain" ? "/tables" : "/dashboard");
+    router.replace(isManagerOrAdmin(user.role) ? "/" : "/tables");
   }, [user, loading, router]);
 
   async function onSubmit(e: FormEvent) {
@@ -30,11 +30,7 @@ export default function LoginPage() {
         mode === "password" ? password : undefined,
         mode === "pin" ? pin : undefined
       );
-      router.replace(
-        session.role === "Captain" || !isManagerOrAdmin(session.role)
-          ? "/tables"
-          : "/dashboard"
-      );
+      router.replace(isManagerOrAdmin(session.role) ? "/" : "/tables");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -47,8 +43,8 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(200,163,108,0.27),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(39,83,67,0.5),_transparent_55%)]" />
       <div className="page-enter relative w-full max-w-md rounded-[28px] border border-white/60 bg-[#fbfaf6] p-6 shadow-2xl sm:p-8">
         <div className="mb-7 flex flex-col items-center text-center">
-          <BrandLogo name="Bramhand" tone="light" />
-          <p className="mt-3 text-sm text-slate-500">Restaurant team sign in · लॉगिन</p>
+          <BrandLogo name="Niyojan Resto" tone="light" />
+          <p className="mt-3 text-sm text-slate-500">One sign-in for Niyojan staff and dashboard · लॉगिन</p>
         </div>
 
         <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-stone-100 p-1">

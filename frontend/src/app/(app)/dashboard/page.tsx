@@ -17,16 +17,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    try {
-      setError("");
-      const dto = await dashboardApi.get();
-      setData(dto);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard");
-    } finally {
-      setLoading(false);
-    }
+    return dashboardApi.get();
   }, []);
+
+  const refresh = useCallback(() => {
+    setError("");
+    void load()
+      .then(setData)
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load dashboard"))
+      .finally(() => setLoading(false));
+  }, [load]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -34,7 +34,22 @@ export default function DashboardPage() {
       router.replace("/tables");
       return;
     }
-    void load();
+    let active = true;
+    void load()
+      .then((dto) => {
+        if (!active) return;
+        setData(dto);
+        setError("");
+      })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof Error ? err.message : "Failed to load dashboard");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [authLoading, isManager, router, load]);
 
   if (!isManager) return null;
@@ -49,7 +64,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-2">
           <Link href="/tables" className="inline-flex min-h-11 items-center rounded-xl bg-[#18352c] px-4 text-sm font-semibold text-white transition hover:bg-[#294d40]">Open tables</Link>
-          <button type="button" onClick={() => void load()} className="inline-flex min-h-11 items-center rounded-xl bg-white px-4 text-sm font-semibold shadow-sm ring-1 ring-[#e8e3d8] transition hover:bg-[#f5f1e8]">Refresh</button>
+          <button type="button" onClick={refresh} className="inline-flex min-h-11 items-center rounded-xl bg-white px-4 text-sm font-semibold shadow-sm ring-1 ring-[#e8e3d8] transition hover:bg-[#f5f1e8]">Refresh</button>
         </div>
       </div>
 
@@ -111,30 +126,117 @@ export default function DashboardPage() {
 }
 
 function SalesChart({ data }: { data: DashboardDto["dailySales"] }) {
+  const chartWidth = 760;
+  const chartHeight = 250;
+  const left = 66;
+  const right = 18;
+  const top = 18;
+  const bottom = 34;
+  const plotWidth = chartWidth - left - right;
+  const plotHeight = chartHeight - top - bottom;
   const maxSale = Math.max(0, ...data.map((day) => day.total));
+  const scaleMax = maxSale > 0 ? maxSale * 1.2 : 1;
+  const points = data.map((day, index) => ({
+    ...day,
+    x: data.length < 2 ? left + plotWidth / 2 : left + (index / (data.length - 1)) * plotWidth,
+    y: top + plotHeight - (Math.max(0, day.total) / scaleMax) * plotHeight,
+  }));
   const compactCurrency = new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     notation: "compact",
     maximumFractionDigits: 1,
   });
+  const gridLines = Array.from({ length: 5 }, (_, index) => {
+    const value = scaleMax * (1 - index / 4);
+    return {
+      value,
+      y: top + (index / 4) * plotHeight,
+    };
+  });
+  const firstPoint = points[0];
+  const lastPoint = points[points.length - 1];
+  const previousPoint = points[points.length - 2];
+  const change = previousPoint && lastPoint && previousPoint.total > 0
+    ? ((lastPoint.total - previousPoint.total) / previousPoint.total) * 100
+    : null;
+  const trendColor = !previousPoint || !lastPoint || lastPoint.total >= previousPoint.total ? "#16865b" : "#d94b4b";
+  const areaPath = points.length > 0
+    ? `M ${firstPoint.x} ${top + plotHeight} L ${points.map((point) => `${point.x} ${point.y}`).join(" L ")} L ${lastPoint.x} ${top + plotHeight} Z`
+    : "";
 
   return (
-    <div role="img" aria-label="Paid sales by day for the last seven days" className="mt-5 grid grid-cols-7 gap-2 sm:gap-4">
-      {data.map((day) => {
-        const date = new Date(day.date);
-        const barHeight = maxSale === 0 ? 0 : Math.max((day.total / maxSale) * 100, day.total > 0 ? 4 : 0);
-        return (
-          <div key={day.date} title={`${date.toLocaleDateString("en-IN", { dateStyle: "medium" })}: ${formatCurrency(day.total)}`} className="flex min-w-0 flex-col items-center">
-            <span className="mb-2 truncate text-[10px] font-medium text-stone-600 sm:text-xs">{compactCurrency.format(day.total)}</span>
-            <div className="flex h-32 w-full items-end justify-center border-b border-stone-300 sm:h-40">
-              <div className="w-full max-w-12 rounded-t-md bg-[#bd8b4d] transition-[height]" style={{ height: `${barHeight}%` }} />
-            </div>
-            <span className="mt-2 text-[10px] font-semibold text-stone-700 sm:text-xs">{date.toLocaleDateString("en-IN", { weekday: "short" })}</span>
-            <span className="text-[10px] text-stone-500">{date.getDate()}</span>
-          </div>
-        );
-      })}
+    <div className="mt-5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="text-stone-500">Daily movement · settled sales</span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-50 px-2.5 py-1 font-semibold tabular-nums" style={{ color: trendColor }}>
+          <span aria-hidden="true">{!previousPoint || !lastPoint ? "•" : lastPoint.total >= previousPoint.total ? "▲" : "▼"}</span>
+          {change === null
+            ? previousPoint && lastPoint && previousPoint.total === 0 && lastPoint.total > 0 ? "New sales" : "No previous sales"
+            : `${Math.abs(change).toFixed(1)}% vs yesterday`}
+        </span>
+      </div>
+      {data.length === 0 ? (
+        <p className="py-12 text-center text-sm text-stone-500">No sales data available yet.</p>
+      ) : (
+        <svg
+          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+          role="img"
+          aria-label="Trading-style line chart showing daily paid sales over the last seven days"
+          className="block h-auto w-full overflow-visible"
+        >
+          <defs>
+            <linearGradient id="sales-chart-area" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#16865b" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="#16865b" stopOpacity="0.01" />
+            </linearGradient>
+          </defs>
+          {gridLines.map((line) => (
+            <g key={line.y}>
+              <line x1={left} x2={chartWidth - right} y1={line.y} y2={line.y} stroke="#eceeea" strokeDasharray="3 6" />
+              <text x={left - 10} y={line.y + 4} textAnchor="end" fill="#89918b" fontSize="11">
+                {compactCurrency.format(line.value)}
+              </text>
+            </g>
+          ))}
+          <path d={areaPath} fill="url(#sales-chart-area)" />
+          {points.slice(1).map((point, index) => {
+            const previous = points[index];
+            const rising = point.total >= previous.total;
+            return (
+              <line
+                key={`${previous.date}-${point.date}`}
+                x1={previous.x}
+                y1={previous.y}
+                x2={point.x}
+                y2={point.y}
+                stroke={rising ? "#16865b" : "#d94b4b"}
+                strokeLinecap="round"
+                strokeWidth="3"
+              />
+            );
+          })}
+          {points.map((point, index) => {
+            const date = new Date(point.date);
+            const color = index === 0 || point.total >= points[index - 1].total ? "#16865b" : "#d94b4b";
+            const isLatest = index === points.length - 1;
+            return (
+              <g key={point.date}>
+                <title>{`${date.toLocaleDateString("en-IN", { dateStyle: "medium" })}: ${formatCurrency(point.total)}`}</title>
+                {isLatest ? <circle cx={point.x} cy={point.y} r="11" fill={color} fillOpacity="0.14" /> : null}
+                <circle cx={point.x} cy={point.y} r={isLatest ? 5 : 4} fill="white" stroke={color} strokeWidth="2.5" />
+                <text x={point.x} y={chartHeight - 12} textAnchor="middle" fill="#606962" fontSize="11" fontWeight={isLatest ? "700" : "500"}>
+                  {date.toLocaleDateString("en-IN", { weekday: "short" })}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      )}
+      <div className="mt-1 flex items-center justify-end gap-4 text-[11px] text-stone-500">
+        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#16865b]" />Up</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#d94b4b]" />Down</span>
+      </div>
     </div>
   );
 }

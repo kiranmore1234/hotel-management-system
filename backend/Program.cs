@@ -84,7 +84,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<RestaurantHub>("/hubs/restaurant");
-app.MapGet("/", () => Results.Ok(new { app = "Bramhand API", status = "running" }));
+app.MapGet("/", () => Results.Ok(new { app = "Niyojan Resto API", status = "running" }));
 
 app.Run();
 

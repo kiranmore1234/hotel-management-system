@@ -32,7 +32,6 @@ const DISH_PHOTOS: Record<string, string> = {
   "Vada Pav": "https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=900&q=80",
   "Puran Poli": "https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=900&q=80",
   "Bharli Vangi": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80",
-  "Zunka Bhakri": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80",
   "Kolhapuri Chicken": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=900&q=80",
   "Idli Sambar": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=900&q=80",
   "Masala Dosa": "https://images.unsplash.com/photo-1630383249896-424e482df921?auto=format&fit=crop&w=900&q=80",
@@ -46,8 +45,9 @@ const DISH_PHOTOS: Record<string, string> = {
   "Egg Fried Rice": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&w=900&q=80",
 };
 
-export function getDishPhoto(item: MenuItemDto): string {
+export function getDishPhoto(item: MenuItemDto): string | null {
   if (DISH_PHOTOS[item.name]) return DISH_PHOTOS[item.name];
+  if (item.categoryName === "Maharashtrian" && (item.name === "Mix Veg" || item.name === "Zunka Bhakri")) return null;
   if (item.imageUrl) return item.imageUrl;
   if (item.vegType === "Egg") return "https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=900&q=80";
   if (item.vegType === "NonVeg") return NON_VEG_PHOTO;

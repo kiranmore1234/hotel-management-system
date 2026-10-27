@@ -158,37 +158,42 @@ export default function MenuManagerPage() {
                 ) : null}
               </h2>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {cat.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="food-card lift-card overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e8e3d8]"
-                  >
-                    <div className="overflow-hidden">
-                      <Image src={getDishPhoto(item)} alt={item.name} width={900} height={506} unoptimized className="food-image aspect-[16/9] w-full object-cover" />
-                    </div>
-                    <div className="p-3.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="font-semibold text-slate-900">{item.name}</div>
-                          <div className="mt-0.5 text-xs text-slate-500">ID {item.id} · Veg</div>
+                {cat.items.map((item) => {
+                  const photoUrl = getDishPhoto(item);
+                  return (
+                    <div
+                      key={item.id}
+                      className="food-card lift-card overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e8e3d8]"
+                    >
+                      {photoUrl ? (
+                        <div className="overflow-hidden">
+                          <Image src={photoUrl} alt={item.name} width={900} height={506} unoptimized className="food-image aspect-[16/9] w-full object-cover" />
                         </div>
-                        <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ring-1 ${item.vegType === "Veg" ? "bg-emerald-500 ring-emerald-700" : item.vegType === "NonVeg" ? "bg-rose-500 ring-rose-700" : "bg-amber-400 ring-amber-700"}`} aria-label={item.vegType} />
+                      ) : null}
+                      <div className="p-3.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900">{item.name}</div>
+                            <div className="mt-0.5 text-xs text-slate-500">ID {item.id} · Veg</div>
+                          </div>
+                          <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ring-1 ${item.vegType === "Veg" ? "bg-emerald-500 ring-emerald-700" : item.vegType === "NonVeg" ? "bg-rose-500 ring-rose-700" : "bg-amber-400 ring-amber-700"}`} aria-label={item.vegType} />
+                        </div>
+                        {item.description ? <p className="mt-1 line-clamp-2 text-sm text-stone-500">{item.description}</p> : null}
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-stone-100 pt-3">
+                          <div className="text-sm font-semibold text-stone-900">
+                            {formatCurrency(item.price)}{item.hasHalfFull ? ` · Half ${formatCurrency(item.halfPrice)}` : ""}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <StatusBadge status={item.isAvailable ? "Vacant" : "Cancelled"} />
+                            <button type="button" disabled={busyId === item.id} onClick={() => void toggleAvailability(item)} className={`min-h-9 rounded-lg px-3 text-xs font-semibold disabled:opacity-50 ${item.isAvailable ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200" : "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"}`}>
+                              {item.isAvailable ? "Mark out" : "Mark in"}
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      {item.description ? <p className="mt-1 line-clamp-2 text-sm text-stone-500">{item.description}</p> : null}
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-stone-100 pt-3">
-                        <div className="text-sm font-semibold text-stone-900">
-                          {formatCurrency(item.price)}{item.hasHalfFull ? ` · Half ${formatCurrency(item.halfPrice)}` : ""}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={item.isAvailable ? "Vacant" : "Cancelled"} />
-                          <button type="button" disabled={busyId === item.id} onClick={() => void toggleAvailability(item)} className={`min-h-9 rounded-lg px-3 text-xs font-semibold disabled:opacity-50 ${item.isAvailable ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200" : "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"}`}>
-                            {item.isAvailable ? "Mark out" : "Mark in"}
-                          </button>
-                        </div>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ))}

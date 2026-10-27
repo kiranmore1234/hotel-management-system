@@ -23,10 +23,10 @@ const emptySettings: SettingsForm = {
   address: "",
   phone: "",
   gstin: "",
-  defaultCgstPercent: 2.5,
-  defaultSgstPercent: 2.5,
+  defaultCgstPercent: 5,
+  defaultSgstPercent: 5,
   serviceChargePercent: 0,
-  billPrefix: "BH",
+  billPrefix: "NR",
 };
 
 export default function SettingsPage() {
@@ -119,9 +119,9 @@ export default function SettingsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <NumberField label="CGST (%)" value={settings.defaultCgstPercent} onChange={(value) => update("defaultCgstPercent", value)} />
               <NumberField label="SGST (%)" value={settings.defaultSgstPercent} onChange={(value) => update("defaultSgstPercent", value)} />
-              <NumberField label="Service charge (%)" value={settings.serviceChargePercent} onChange={(value) => update("serviceChargePercent", value)} />
               <Field label="Bill number prefix" value={settings.billPrefix} required onChange={(value) => update("billPrefix", value)} />
             </div>
+            <p className="mt-3 text-xs text-stone-500">A fixed ₹500 service charge is added to each new bill.</p>
           </section>
 
           <button type="submit" disabled={saving || fetching} className="min-h-11 rounded-lg bg-stone-900 px-5 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50">

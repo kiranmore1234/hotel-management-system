@@ -3,10 +3,19 @@
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ApiError, billsApi, ordersApi } from "@/lib/api";
+import { ApiError, api, billsApi, ordersApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatCurrency } from "@/lib/format";
 import type { BillDto, OrderDto, PaymentMode } from "@/lib/types";
+
+type RestaurantBillDetails = {
+  restaurantName: string;
+  address: string | null;
+  phone: string | null;
+  gstin: string | null;
+  defaultCgstPercent: number;
+  defaultSgstPercent: number;
+};
 
 export default function BillingPage({
   params,
@@ -20,6 +29,14 @@ export default function BillingPage({
 
   const [order, setOrder] = useState<OrderDto | null>(null);
   const [bill, setBill] = useState<BillDto | null>(null);
+  const [restaurant, setRestaurant] = useState<RestaurantBillDetails>({
+    restaurantName: "Niyojan Resto",
+    address: "Laxmi Chowk Hinjewadi Pune",
+    phone: "8488848987",
+    gstin: "3243",
+    defaultCgstPercent: 2.5,
+    defaultSgstPercent: 2.5,
+  });
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountPercent, setDiscountPercent] = useState(0);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("Cash");
@@ -29,24 +46,21 @@ export default function BillingPage({
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    const [loadedOrder, loadedRestaurant] = await Promise.all([
+      ordersApi.byId(orderId),
+      api<RestaurantBillDetails>("/api/settings"),
+    ]);
+    let loadedBill: BillDto | null;
     try {
-      setError("");
-      const o = await ordersApi.byId(orderId);
-      setOrder(o);
-      try {
-        setBill(await billsApi.byOrder(orderId));
-      } catch (billError) {
-        if (billError instanceof ApiError && billError.status === 404) {
-          setBill(null);
-        } else {
-          throw billError;
-        }
+      loadedBill = await billsApi.byOrder(orderId);
+    } catch (billError) {
+      if (billError instanceof ApiError && billError.status === 404) {
+        loadedBill = null;
+      } else {
+        throw billError;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load order");
-    } finally {
-      setLoading(false);
     }
+    return { order: loadedOrder, restaurant: loadedRestaurant, bill: loadedBill };
   }, [orderId]);
 
   useEffect(() => {
@@ -56,7 +70,24 @@ export default function BillingPage({
       return;
     }
     if (!Number.isFinite(orderId)) return;
-    void load();
+    let active = true;
+    void load()
+      .then((result) => {
+        if (!active) return;
+        setOrder(result.order);
+        setRestaurant(result.restaurant);
+        setBill(result.bill);
+        setError("");
+      })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof Error ? err.message : "Failed to load order");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [authLoading, isManager, router, load, orderId]);
 
   const preview = useMemo(() => {
@@ -68,12 +99,14 @@ export default function BillingPage({
       discount = Math.round(((subtotal * discountPercent) / 100) * 100) / 100;
     }
     const after = Math.max(0, subtotal - discount);
-    const cgst = Math.round(after * 0.025 * 100) / 100;
-    const sgst = Math.round(after * 0.025 * 100) / 100;
-    const raw = after + cgst + sgst;
+    const serviceCharge = 500;
+    const taxable = after + serviceCharge;
+    const cgst = Math.round(taxable * (restaurant.defaultCgstPercent / 100) * 100) / 100;
+    const sgst = Math.round(taxable * (restaurant.defaultSgstPercent / 100) * 100) / 100;
+    const raw = taxable + cgst + sgst;
     const total = Math.round(raw);
-    return { subtotal, discount, cgst, sgst, roundOff: total - raw, total };
-  }, [order, discountAmount, discountPercent]);
+    return { subtotal, discount, serviceCharge, cgst, sgst, roundOff: total - raw, total };
+  }, [order, discountAmount, discountPercent, restaurant]);
 
   async function createBill(andPay: boolean) {
     if (!order) return;
@@ -126,7 +159,7 @@ export default function BillingPage({
       const printedBill = await billsApi.print(bill.id);
       setBill(printedBill);
       printWindow.document.open();
-      printWindow.document.write(buildBillHtml(printedBill, true));
+      printWindow.document.write(buildBillHtml(printedBill, restaurant, true));
       printWindow.document.close();
       printWindow.focus();
     } catch (err) {
@@ -140,15 +173,21 @@ export default function BillingPage({
   function shareOnWhatsApp() {
     if (!bill) return;
     const lines = [
-      `Bramhand Restaurant — Bill ${bill.billNumber}`,
+      `${restaurant.restaurantName} — Bill ${bill.billNumber}`,
+      restaurant.address ?? "",
+      `Phone: ${restaurant.phone ?? "—"} | GSTIN: ${restaurant.gstin ?? "—"}`,
       `Table: ${bill.order.tableNo} | Order: ${bill.order.orderNumber}`,
       ...bill.order.items
         .filter((item) => item.status !== "Cancelled")
         .map((item) => `${item.quantity} x ${item.itemName}: ${formatCurrency(item.lineTotal)}`),
       `Subtotal: ${formatCurrency(bill.subtotal)}`,
+      `Service charge: ${formatCurrency(bill.serviceCharge)}`,
       `Discount: ${formatCurrency(bill.discountAmount)}`,
-      `CGST: ${formatCurrency(bill.cgst)} | SGST: ${formatCurrency(bill.sgst)}`,
-      `Total: ${formatCurrency(bill.total)}`,
+      `Before tax: ${formatCurrency(bill.subtotal - bill.discountAmount + bill.serviceCharge)}`,
+      `Tax (${restaurant.defaultCgstPercent + restaurant.defaultSgstPercent}%): ${formatCurrency(bill.cgst + bill.sgst)}`,
+      `Gross total: ${formatCurrency(bill.total)}`,
+      `Amount paid: ${formatCurrency(bill.paidAmount)}`,
+      `Amount due: ${formatCurrency(Math.max(0, bill.total - bill.paidAmount))}`,
       bill.paidAt ? `Payment: ${bill.paymentMode ?? "Paid"}` : "Payment pending",
     ];
     const phoneDigits = bill.order.customerPhone?.replace(/\D/g, "");
@@ -159,7 +198,7 @@ export default function BillingPage({
 
   function downloadBill() {
     if (!bill) return;
-    const url = URL.createObjectURL(new Blob([buildBillHtml(bill)], { type: "text/html;charset=utf-8" }));
+    const url = URL.createObjectURL(new Blob([buildBillHtml(bill, restaurant)], { type: "text/html;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = `${bill.billNumber}.html`;
@@ -291,24 +330,26 @@ export default function BillingPage({
                   {bill ? (
                     <>
                       <Row label="Subtotal" value={bill.subtotal} />
+                      <Row label="Service charge" value={bill.serviceCharge} />
                       <Row label="Discount" value={-bill.discountAmount} />
-                      <Row label="Service" value={bill.serviceCharge} />
-                      <Row label="CGST" value={bill.cgst} />
-                      <Row label="SGST" value={bill.sgst} />
-                      <Row label="Round off" value={bill.roundOff} />
+                      <Row label="Before tax" value={bill.subtotal - bill.discountAmount + bill.serviceCharge} />
+                      <Row label={`Tax (${restaurant.defaultCgstPercent + restaurant.defaultSgstPercent}%)`} value={bill.cgst + bill.sgst} />
+                      <Row label="Amount paid" value={-bill.paidAmount} />
+                      <Row label="Amount due" value={Math.max(0, bill.total - bill.paidAmount)} />
                       <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-bold">
-                        <span>Total</span>
+                        <span>Gross total</span>
                         <span className="text-amber-700">{formatCurrency(bill.total)}</span>
                       </div>
                     </>
                   ) : preview ? (
                     <>
                       <Row label="Subtotal" value={preview.subtotal} />
+                      <Row label="Service charge" value={preview.serviceCharge} />
                       <Row label="Discount" value={-preview.discount} />
-                      <Row label="CGST (est.)" value={preview.cgst} />
-                      <Row label="SGST (est.)" value={preview.sgst} />
+                      <Row label="Before tax" value={preview.subtotal - preview.discount + preview.serviceCharge} />
+                      <Row label={`Tax (${restaurant.defaultCgstPercent + restaurant.defaultSgstPercent}%)`} value={preview.cgst + preview.sgst} />
                       <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-bold">
-                        <span>Est. total</span>
+                        <span>Est. gross total</span>
                         <span className="text-amber-700">
                           {formatCurrency(preview.total)}
                         </span>
@@ -358,7 +399,7 @@ export default function BillingPage({
   );
 }
 
-function buildBillHtml(bill: BillDto, autoPrint = false) {
+function buildBillHtml(bill: BillDto, restaurant: RestaurantBillDetails, autoPrint = false) {
   const escapeHtml = (value: string) =>
     value.replace(/[&<>"']/g, (char) => ({
       "&": "&amp;",
@@ -369,10 +410,15 @@ function buildBillHtml(bill: BillDto, autoPrint = false) {
     })[char] ?? char);
   const rows = bill.order.items
     .filter((item) => item.status !== "Cancelled")
-    .map((item) => `<tr><td>${escapeHtml(item.itemName)}${item.isHalf ? " (Half)" : ""}</td><td>${item.quantity}</td><td>${escapeHtml(formatCurrency(item.lineTotal))}</td></tr>`)
+    .map((item) => `<tr><td>${escapeHtml(item.itemName)}${item.isHalf ? " (Half)" : ""}</td><td>${item.quantity}</td><td>${escapeHtml(formatCurrency(item.unitPrice))}</td><td>${escapeHtml(formatCurrency(item.lineTotal))}</td></tr>`)
     .join("");
   const autoPrintScript = autoPrint ? "<script>window.onload=()=>window.print()</script>" : "";
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Bill ${escapeHtml(bill.billNumber)}</title><style>body{font:15px Arial,sans-serif;max-width:720px;margin:40px auto;color:#222}h1{margin-bottom:4px}.muted{color:#666}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{text-align:left;border-bottom:1px solid #ddd;padding:10px 6px}th:last-child,td:last-child{text-align:right}.total{font-size:20px;font-weight:bold;border-top:2px solid #222;padding-top:12px;text-align:right}@media print{body{margin:0}}</style></head><body><h1>Bramhand Restaurant</h1><p class="muted">Bill ${escapeHtml(bill.billNumber)} · ${new Date(bill.createdAt).toLocaleString()}</p><p>Order ${escapeHtml(bill.order.orderNumber)} · Table ${escapeHtml(bill.order.tableNo)} · ${escapeHtml(bill.order.floorName)}</p><table><thead><tr><th>Item</th><th>Qty</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table><p>Subtotal: ${escapeHtml(formatCurrency(bill.subtotal))}</p><p>Discount: ${escapeHtml(formatCurrency(bill.discountAmount))}</p><p>Service charge: ${escapeHtml(formatCurrency(bill.serviceCharge))}</p><p>CGST: ${escapeHtml(formatCurrency(bill.cgst))} · SGST: ${escapeHtml(formatCurrency(bill.sgst))}</p><p>Round off: ${escapeHtml(formatCurrency(bill.roundOff))}</p><p class="total">Total: ${escapeHtml(formatCurrency(bill.total))}</p><p class="muted">${bill.paidAt ? `Payment settled via ${escapeHtml(bill.paymentMode ?? "")}` : "Payment pending"}</p>${autoPrintScript}</body></html>`;
+  const beforeTax = bill.subtotal - bill.discountAmount + bill.serviceCharge;
+  const taxPercent = restaurant.defaultCgstPercent + restaurant.defaultSgstPercent;
+  const amountDue = Math.max(0, bill.total - bill.paidAmount);
+  const issued = new Date(bill.createdAt).toLocaleDateString("en-IN");
+  const paymentMode = bill.paymentMode === "Upi" ? "UPI" : bill.paymentMode ?? "Pending";
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${escapeHtml(bill.billNumber)}</title><style>*{box-sizing:border-box}body{font:14px Arial,sans-serif;max-width:760px;margin:32px auto;padding:28px;color:#222;border:1px solid #ddd}.brand{font-size:24px;margin:0 0 6px}.muted{color:#666}.invoice-title{font-size:22px;margin:28px 0 4px}.section{margin:22px 0 8px;font-size:15px;font-weight:bold}.guest{padding:12px;background:#f7f7f7}.guest p{margin:5px 0}table{width:100%;border-collapse:collapse;margin:18px 0}th,td{text-align:left;border-bottom:1px solid #ddd;padding:10px 6px}th:not(:first-child),td:not(:first-child){text-align:right}.totals{width:min(100%,390px);margin:16px 0 0 auto}.line{display:flex;justify-content:space-between;gap:16px;padding:5px 0}.total{font-size:18px;font-weight:bold;border-top:2px solid #222;margin-top:6px;padding-top:10px}.due{font-size:16px;font-weight:bold}@media print{body{margin:0 auto;border:0;padding:12px}}</style></head><body><h1 class="brand">${escapeHtml(restaurant.restaurantName)}</h1><p class="muted">${escapeHtml(restaurant.address ?? "")}<br>Phone: ${escapeHtml(restaurant.phone ?? "—")} | GSTIN: ${escapeHtml(restaurant.gstin ?? "—")}</p><h2 class="invoice-title">Restaurant Invoice</h2><p class="muted">#${escapeHtml(bill.billNumber)} · Issue: ${issued}</p><h3 class="section">Guest Details</h3><div class="guest"><p><strong>${escapeHtml(bill.order.customerName ?? "Walk-in Guest")}</strong></p>${bill.order.customerPhone ? `<p>${escapeHtml(bill.order.customerPhone)}</p>` : ""}<p>Table ${escapeHtml(bill.order.tableNo)} (${escapeHtml(bill.order.floorName)})</p><p>Order: ${escapeHtml(bill.order.orderNumber)}</p></div><h3 class="section">Order Details</h3><table><thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${rows}</tbody></table><div class="totals"><div class="line"><span>Subtotal</span><span>${escapeHtml(formatCurrency(bill.subtotal))}</span></div><div class="line"><span>Service Charge</span><span>${escapeHtml(formatCurrency(bill.serviceCharge))}</span></div><div class="line"><span>Discount</span><span>-${escapeHtml(formatCurrency(bill.discountAmount))}</span></div><div class="line"><span>Before Tax</span><span>${escapeHtml(formatCurrency(beforeTax))}</span></div><div class="line"><span>Tax (${taxPercent.toFixed(2)}%)</span><span>${escapeHtml(formatCurrency(bill.cgst + bill.sgst))}</span></div><div class="line total"><span>Gross Total</span><span>${escapeHtml(formatCurrency(bill.total))}</span></div><div class="line"><span>Amount Paid</span><span>-${escapeHtml(formatCurrency(bill.paidAmount))}</span></div><div class="line due"><span>Amount Due</span><span>${escapeHtml(formatCurrency(amountDue))}</span></div><div class="line"><span>Payment Mode</span><span>${escapeHtml(paymentMode)}</span></div></div>${autoPrintScript}</body></html>`;
 }
 
 function Row({ label, value }: { label: string; value: number }) {

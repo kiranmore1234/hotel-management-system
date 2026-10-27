@@ -4,7 +4,10 @@ public enum UserRole
 {
     Admin = 1,
     Manager = 2,
-    Captain = 3
+    Captain = 3,
+    Waiter = 4,
+    Helper = 5,
+    Chef = 6
 }
 
 public enum TableStatus
