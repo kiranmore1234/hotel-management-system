@@ -16,7 +16,7 @@ export type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   isManager: boolean;
-  login: (username: string, password?: string, pin?: string) => Promise<AuthUser>;
+  login: (username: string, password: string) => Promise<AuthUser>;
   logout: () => void;
 };
 

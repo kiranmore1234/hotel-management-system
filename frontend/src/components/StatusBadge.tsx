@@ -1,5 +1,7 @@
 const tones: Record<string, string> = {
   Vacant: "bg-emerald-100 text-emerald-800",
+  Available: "bg-emerald-100 text-emerald-800",
+  "Out of stock": "bg-rose-100 text-rose-800",
   Occupied: "bg-rose-100 text-rose-800",
   Billing: "bg-amber-100 text-amber-900",
   Reserved: "bg-sky-100 text-sky-800",

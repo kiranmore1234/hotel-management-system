@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <p className="mt-8 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#94a99e]">Restaurant</p>
         <nav className="mt-3 space-y-1.5">
-          <Link href="/about" className="flex min-h-12 items-center gap-3 rounded-xl px-3.5 text-sm font-medium text-[#d2ddd6] transition hover:bg-white/10 hover:text-white"><span className="w-5 text-center text-lg" aria-hidden="true">ⓘ</span>About</Link>
+          <Link href="/restaurant-profile" className="flex min-h-12 items-center gap-3 rounded-xl px-3.5 text-sm font-medium text-[#d2ddd6] transition hover:bg-white/10 hover:text-white"><span className="w-5 text-center text-lg" aria-hidden="true">ⓘ</span>Restaurant profile</Link>
           {user?.role === "Admin" ? <Link href="/settings" className="flex min-h-12 items-center gap-3 rounded-xl px-3.5 text-sm font-medium text-[#d2ddd6] transition hover:bg-white/10 hover:text-white"><span className="w-5 text-center text-lg" aria-hidden="true">⚙</span>Settings</Link> : null}
         </nav>
         <div className="mt-auto rounded-2xl border border-white/10 bg-black/10 p-3">
@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         { href: "/dashboard", label: "Home", icon: "⌂" },
         { href: "/tables", label: "Tables", icon: "▦" },
         { href: "/menu", label: "Menu", icon: "≡" },
-        { href: "/about", label: "About", icon: "ⓘ" },
+        { href: "/restaurant-profile", label: "Profile", icon: "ⓘ" },
         ...(user?.role === "Admin" ? [{ href: "/settings", label: "Settings", icon: "⚙" }] : []),
       ].map((item) => <Link key={item.href} href={item.href} className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${pathname === item.href ? "text-[#936b3f]" : "text-[#879187]"}`}><span className="text-lg leading-none" aria-hidden="true">{item.icon}</span>{item.label}</Link>)}</div></nav>
     </div>

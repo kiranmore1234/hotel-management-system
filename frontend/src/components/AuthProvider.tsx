@@ -52,10 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(
-    async (username: string, password?: string, pin?: string) => {
+    async (username: string, password: string) => {
       const response = await api<LoginResponse>("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ username, password, pin }),
+        body: JSON.stringify({ username, password }),
         skipAuth: true,
       });
       setStoredToken(response.token);

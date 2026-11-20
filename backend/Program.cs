@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Net;
+using System.Security.Claims;
 using Bramhand.Api.Data;
 using Bramhand.Api.Hubs;
 using Bramhand.Api.Services;
@@ -21,8 +22,25 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IRealtimeService, RealtimeService>();
 
+var databaseProvider = builder.Configuration["Database:Provider"] ?? "SqlServer";
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException("Configure ConnectionStrings:Default for the selected database provider.");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=bramhand.db"));
+{
+    switch (databaseProvider.Trim().ToLowerInvariant())
+    {
+        case "sqlserver":
+            options.UseSqlServer(connectionString);
+            break;
+        case "sqlite":
+            options.UseSqlite(connectionString);
+            break;
+        default:
+            throw new InvalidOperationException(
+                $"Unsupported database provider '{databaseProvider}'. Supported providers are SqlServer and Sqlite.");
+    }
+});
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -47,6 +65,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/restaurant"))
                     context.Token = accessToken;
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var userIdValue = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdValue, out var userId) ||
+                    !await context.HttpContext.RequestServices
+                        .GetRequiredService<AppDbContext>()
+                        .Users.AnyAsync(
+                            user => user.Id == userId &&
+                                    user.IsActive &&
+                                    (user.Role == Bramhand.Api.Models.UserRole.Admin ||
+                                     user.Role == Bramhand.Api.Models.UserRole.Manager),
+                            context.HttpContext.RequestAborted))
+                {
+                    context.Fail("The account is inactive, unauthorized, or no longer exists.");
+                }
             }
         };
     });
@@ -57,10 +91,15 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 builder.Services.AddSignalR();
 builder.Services.AddOpenApi();
 
+var configuredFrontendOrigins =
+    builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
-        policy.SetIsOriginAllowed(IsAllowedFrontendOrigin)
+        policy.SetIsOriginAllowed(origin =>
+                IsAllowedFrontendOrigin(origin) ||
+                configuredFrontendOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials());

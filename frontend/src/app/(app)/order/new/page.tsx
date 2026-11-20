@@ -20,7 +20,7 @@ export default function NewOrderPage({
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
-  const [dietaryFilter, setDietaryFilter] = useState<"All" | "Veg" | "South Indian" | "Maharashtrian">("All");
+  const [dietaryFilter, setDietaryFilter] = useState<"All" | "Veg" | "NonVeg" | "South Indian" | "Maharashtrian">("All");
   const [existingOrder, setExistingOrder] = useState<OrderDto | null>(null);
   const [orderLoading, setOrderLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -70,26 +70,26 @@ export default function NewOrderPage({
     () => {
       const query = search.trim().toLocaleLowerCase();
       return categories
-        .filter((category) => category.items.some((item) => item.vegType === "Veg"))
         .filter((category) => dietaryFilter === "South Indian" || dietaryFilter === "Maharashtrian"
           ? category.name === dietaryFilter
           : query || activeCategoryId === null || category.id === activeCategoryId)
         .flatMap((category) => category.items)
-        .filter((item) => item.vegType === "Veg")
         .filter((item) => {
           const matchesSearch = !query || `${item.name} ${item.description ?? ""} ${item.categoryName}`
             .toLocaleLowerCase()
             .includes(query);
-          const matchesFilter = dietaryFilter === "All" ||
-            dietaryFilter === "Veg" ||
-            item.categoryName === dietaryFilter;
+          const matchesFilter = dietaryFilter === "All"
+            ? true
+            : dietaryFilter === "Veg" || dietaryFilter === "NonVeg"
+              ? item.vegType === dietaryFilter
+              : item.categoryName === dietaryFilter;
           return matchesSearch && matchesFilter;
         });
     },
     [categories, activeCategoryId, search, dietaryFilter]
   );
 
-  function selectMenuFilter(filter: "All" | "Veg" | "South Indian" | "Maharashtrian") {
+  function selectMenuFilter(filter: "All" | "Veg" | "NonVeg" | "South Indian" | "Maharashtrian") {
     setDietaryFilter(filter);
     setActiveCategoryId(null);
     setSearch("");
@@ -154,7 +154,8 @@ export default function NewOrderPage({
         setCart([]);
         setNote("");
         setCartOpen(false);
-        setSuccess(`Items kitchen ko bhej diye (KOT #${updatedOrder.kotCounter}). Aur items yahin se add kar sakte hain.`);
+        setSuccess("");
+        router.replace(`/orders/${tableId}`);
         return;
       } else {
         await ordersApi.create({
@@ -265,6 +266,7 @@ export default function NewOrderPage({
             {([
               ["All", "All items"],
               ["Veg", "Veg"],
+              ["NonVeg", "Non-veg"],
               ["South Indian", "South Indian"],
               ["Maharashtrian", "Maharashtrian"],
             ] as const).map(([value, label]) => (
@@ -296,7 +298,7 @@ export default function NewOrderPage({
                 <article key={item.id} className="food-card lift-card overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e8e3d8]">
                   {photoUrl ? (
                     <div className="relative overflow-hidden">
-                      <Image src={photoUrl} alt={item.name} width={900} height={506} unoptimized className="food-image aspect-[16/9] w-full object-cover" />
+                      <Image src={photoUrl} alt={item.name} width={900} height={506} unoptimized className="food-image aspect-[16/9] w-full object-cover transition-transform duration-500 hover:scale-105" />
                       <span className="absolute bottom-3 right-3 rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-[#26342c] shadow">{formatCurrency(item.price)}</span>
                     </div>
                   ) : (
@@ -307,7 +309,7 @@ export default function NewOrderPage({
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <span className="mb-2 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Veg</span>
+                      <span className={`mb-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.vegType === "Veg" ? "bg-emerald-50 text-emerald-700" : item.vegType === "NonVeg" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{item.vegType === "NonVeg" ? "Non-veg" : item.vegType}</span>
                       <h2 className="font-display text-lg font-semibold text-[#26342c]">{item.name}</h2>
                       <p className="mt-1 line-clamp-2 min-h-8 text-xs leading-relaxed text-stone-500">{item.description || item.categoryName}</p>
                     </div>

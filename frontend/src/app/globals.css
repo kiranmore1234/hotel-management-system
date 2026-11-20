@@ -84,6 +84,160 @@ textarea:focus-visible {
   animation: page-enter 420ms ease both;
 }
 
+.login-backdrop {
+  background:
+    radial-gradient(ellipse at 10% 12%, rgb(216 168 93 / 22%), transparent 36%),
+    radial-gradient(ellipse at 92% 88%, rgb(38 84 66 / 17%), transparent 38%),
+    #f4f2eb;
+  background-size: 140% 140%;
+  animation: login-backdrop-drift 18s ease-in-out infinite alternate;
+}
+
+.login-card {
+  border: 1px solid rgb(255 255 255 / 72%);
+  box-shadow: 0 35px 100px rgb(22 45 36 / 20%), 0 8px 26px rgb(22 45 36 / 7%);
+}
+
+.login-visual-image {
+  background-image: url("/images/niyojan-evening.png");
+  background-position: center;
+  background-size: cover;
+  animation: login-image-drift 24s ease-in-out infinite alternate;
+}
+
+.login-visual-shade {
+  background:
+    linear-gradient(180deg, rgb(8 28 23 / 48%) 0%, rgb(15 40 31 / 8%) 38%, rgb(8 28 23 / 88%) 100%),
+    linear-gradient(115deg, rgb(16 47 36 / 50%), transparent 72%);
+}
+
+.login-visual-glow {
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 72% 28%, rgb(232 193 126 / 18%), transparent 34%),
+    linear-gradient(115deg, transparent 20%, rgb(255 255 255 / 5%) 48%, transparent 76%);
+  background-size: 160% 160%;
+  animation: login-glow-drift 12s ease-in-out infinite alternate;
+}
+
+.login-brand-row {
+  animation: login-content-enter 700ms 80ms both;
+}
+
+.login-hero-copy {
+  animation: login-content-enter 760ms 220ms both;
+}
+
+.login-eyebrow {
+  box-shadow: 0 8px 28px rgb(0 0 0 / 10%);
+  animation: login-badge-glow 4s ease-in-out infinite;
+}
+
+.login-hero-title {
+  text-wrap: balance;
+  text-shadow: 0 4px 24px rgb(0 0 0 / 24%);
+}
+
+.login-form-panel {
+  background:
+    radial-gradient(ellipse at 100% 0%, rgb(226 236 224 / 42%), transparent 34%),
+    #fbfaf6;
+}
+
+.login-access-badge {
+  box-shadow: 0 5px 16px rgb(24 53 44 / 5%);
+}
+
+.login-heading {
+  animation: login-heading-enter 700ms 180ms both;
+}
+
+.login-voice-button {
+  box-shadow: 0 4px 14px rgb(24 53 44 / 5%);
+}
+
+.login-voice-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgb(24 53 44 / 10%);
+}
+
+.login-input-wrap {
+  box-shadow: 0 2px 6px rgb(28 43 34 / 2%);
+}
+
+.login-input-wrap:focus-within {
+  background: #fffefa;
+  transform: translateY(-1px);
+}
+
+.login-input-wrap:focus-within svg {
+  color: #a36f32;
+  transition: color 180ms ease;
+}
+
+.login-submit {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.login-submit::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 25%, rgb(255 255 255 / 17%) 50%, transparent 75%);
+  transform: translateX(-120%);
+  transition: transform 650ms ease;
+  content: "";
+}
+
+.login-submit:hover::before {
+  transform: translateX(120%);
+}
+
+.login-orbit {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 9999px;
+  pointer-events: none;
+}
+
+.login-orbit-one {
+  top: 22%;
+  right: -9rem;
+  width: 23rem;
+  height: 23rem;
+  animation: login-orbit 26s linear infinite;
+}
+
+.login-orbit-two {
+  top: 28%;
+  right: -6rem;
+  width: 17rem;
+  height: 17rem;
+  border-color: rgb(240 215 171 / 22%);
+  animation: login-orbit 32s linear infinite reverse;
+}
+
+.login-orbit-one::after,
+.login-orbit-two::after {
+  position: absolute;
+  top: 18%;
+  left: 12%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e7c78e;
+  box-shadow: 0 0 18px 5px rgb(231 199 142 / 42%);
+  content: "";
+}
+
+.login-form-enter {
+  animation: login-form-enter 560ms 100ms both;
+}
+
 @keyframes page-enter {
   from {
     opacity: 0;
@@ -93,6 +247,91 @@ textarea:focus-visible {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes login-form-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes login-backdrop-drift {
+  from {
+    background-position: 0% 0%;
+  }
+
+  to {
+    background-position: 100% 100%;
+  }
+}
+
+@keyframes login-image-drift {
+  from {
+    transform: scale(1.02);
+  }
+
+  to {
+    transform: scale(1.1) translate3d(-1%, -0.5%, 0);
+  }
+}
+
+@keyframes login-glow-drift {
+  from {
+    background-position: 0% 50%;
+    opacity: 0.65;
+  }
+
+  to {
+    background-position: 100% 50%;
+    opacity: 1;
+  }
+}
+
+@keyframes login-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-heading-enter {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-badge-glow {
+  0%,
+  100% {
+    box-shadow: 0 8px 28px rgb(0 0 0 / 10%);
+  }
+
+  50% {
+    box-shadow: 0 8px 32px rgb(231 199 142 / 24%);
   }
 }
 

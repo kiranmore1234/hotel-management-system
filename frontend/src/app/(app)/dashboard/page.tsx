@@ -86,13 +86,13 @@ export default function DashboardPage() {
             <Stat label="Billing" value={String(data.billingTables)} />
           </div>
 
-          <section className="mt-8 rounded-3xl border border-[#e8e3d8] bg-white p-5 shadow-sm sm:p-7" aria-labelledby="sales-chart-title">
+          <section className="mt-8 overflow-hidden rounded-3xl border border-[#163d3b] bg-[#071b1d] p-5 text-white shadow-sm sm:p-7" aria-labelledby="sales-chart-title">
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
-                <h2 id="sales-chart-title" className="text-lg font-bold text-stone-900">Sales</h2>
-                <p className="text-sm text-stone-500">Paid bills · last 7 days</p>
+                <h2 id="sales-chart-title" className="text-lg font-bold text-white">Sales growth</h2>
+                <p className="text-sm text-emerald-100/60">Paid bills · last 7 days</p>
               </div>
-              <span className="text-sm font-semibold text-stone-700">Today {formatCurrency(data.todaySale)}</span>
+              <span className="text-sm font-semibold text-emerald-100">Today {formatCurrency(data.todaySale)}</span>
             </div>
             <SalesChart data={data.dailySales ?? []} />
           </section>
@@ -127,11 +127,11 @@ export default function DashboardPage() {
 
 function SalesChart({ data }: { data: DashboardDto["dailySales"] }) {
   const chartWidth = 760;
-  const chartHeight = 250;
-  const left = 66;
-  const right = 18;
-  const top = 18;
-  const bottom = 34;
+  const chartHeight = 300;
+  const left = 54;
+  const right = 20;
+  const top = 24;
+  const bottom = 40;
   const plotWidth = chartWidth - left - right;
   const plotHeight = chartHeight - top - bottom;
   const maxSale = Math.max(0, ...data.map((day) => day.total));
@@ -154,78 +154,102 @@ function SalesChart({ data }: { data: DashboardDto["dailySales"] }) {
       y: top + (index / 4) * plotHeight,
     };
   });
-  const firstPoint = points[0];
   const lastPoint = points[points.length - 1];
   const previousPoint = points[points.length - 2];
   const change = previousPoint && lastPoint && previousPoint.total > 0
     ? ((lastPoint.total - previousPoint.total) / previousPoint.total) * 100
     : null;
-  const trendColor = !previousPoint || !lastPoint || lastPoint.total >= previousPoint.total ? "#16865b" : "#d94b4b";
+  const baseline = top + plotHeight;
   const areaPath = points.length > 0
-    ? `M ${firstPoint.x} ${top + plotHeight} L ${points.map((point) => `${point.x} ${point.y}`).join(" L ")} L ${lastPoint.x} ${top + plotHeight} Z`
+    ? `M ${points[0].x} ${baseline} L ${points.map((point) => `${point.x} ${point.y}`).join(" L ")} L ${lastPoint.x} ${baseline} Z`
     : "";
 
   return (
-    <div className="mt-5">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="text-stone-500">Daily movement · settled sales</span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-50 px-2.5 py-1 font-semibold tabular-nums" style={{ color: trendColor }}>
-          <span aria-hidden="true">{!previousPoint || !lastPoint ? "•" : lastPoint.total >= previousPoint.total ? "▲" : "▼"}</span>
+    <div className="mt-5 rounded-2xl border border-emerald-200/10 bg-[#092326] p-3 sm:p-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="text-emerald-50/60">Daily revenue · settled sales</span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/10 bg-emerald-300/5 px-2.5 py-1 font-semibold text-emerald-200 tabular-nums">
+          <span aria-hidden="true">{!previousPoint || !lastPoint || lastPoint.total >= previousPoint.total ? "▲" : "▼"}</span>
           {change === null
             ? previousPoint && lastPoint && previousPoint.total === 0 && lastPoint.total > 0 ? "New sales" : "No previous sales"
             : `${Math.abs(change).toFixed(1)}% vs yesterday`}
         </span>
       </div>
       {data.length === 0 ? (
-        <p className="py-12 text-center text-sm text-stone-500">No sales data available yet.</p>
+        <p className="py-12 text-center text-sm text-emerald-50/60">No sales data available yet.</p>
       ) : (
         <svg
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
           role="img"
-          aria-label="Trading-style line chart showing daily paid sales over the last seven days"
-          className="block h-auto w-full overflow-visible"
+          aria-label="Dark teal sales chart showing daily revenue bars and trend over the last seven days"
+          className="block h-auto w-full"
         >
           <defs>
             <linearGradient id="sales-chart-area" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#16865b" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="#16865b" stopOpacity="0.01" />
+              <stop offset="0%" stopColor="#52f2c2" stopOpacity="0.24" />
+              <stop offset="100%" stopColor="#52f2c2" stopOpacity="0.01" />
             </linearGradient>
+            <linearGradient id="sales-chart-bars" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#64f5d0" stopOpacity="0.78" />
+              <stop offset="100%" stopColor="#16a88a" stopOpacity="0.12" />
+            </linearGradient>
+            <filter id="sales-chart-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <pattern id="sales-chart-texture" width="34" height="34" patternUnits="userSpaceOnUse">
+              <path d="M 34 0 L 0 0 0 34" fill="none" stroke="#8fffe1" strokeOpacity="0.035" strokeWidth="1" />
+            </pattern>
           </defs>
           {gridLines.map((line) => (
             <g key={line.y}>
-              <line x1={left} x2={chartWidth - right} y1={line.y} y2={line.y} stroke="#eceeea" strokeDasharray="3 6" />
-              <text x={left - 10} y={line.y + 4} textAnchor="end" fill="#89918b" fontSize="11">
+              <line x1={left} x2={chartWidth - right} y1={line.y} y2={line.y} stroke="#b3f5e4" strokeOpacity="0.12" strokeDasharray="4 8" />
+              <text x={left - 10} y={line.y + 4} textAnchor="end" fill="#a3c6bd" fillOpacity="0.75" fontSize="11">
                 {compactCurrency.format(line.value)}
               </text>
             </g>
           ))}
-          <path d={areaPath} fill="url(#sales-chart-area)" />
-          {points.slice(1).map((point, index) => {
-            const previous = points[index];
-            const rising = point.total >= previous.total;
+          <rect x={left} y={top} width={plotWidth} height={plotHeight} fill="url(#sales-chart-texture)" />
+          {points.map((point, index) => {
+            const barWidth = Math.min(28, plotWidth / Math.max(points.length * 2, 1));
+            const height = Math.max(0, baseline - point.y);
             return (
-              <line
-                key={`${previous.date}-${point.date}`}
-                x1={previous.x}
-                y1={previous.y}
-                x2={point.x}
-                y2={point.y}
-                stroke={rising ? "#16865b" : "#d94b4b"}
-                strokeLinecap="round"
-                strokeWidth="3"
+              <rect
+                key={`bar-${point.date}`}
+                x={point.x - barWidth / 2}
+                y={baseline - height}
+                width={barWidth}
+                height={height}
+                rx="5"
+                fill="url(#sales-chart-bars)"
+                opacity={index === points.length - 1 ? 0.9 : 0.48}
               />
             );
           })}
+          <path d={areaPath} fill="url(#sales-chart-area)" />
+          {points.length > 1 ? (
+            <polyline
+              points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+              fill="none"
+              stroke="#55f2c4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3"
+              filter="url(#sales-chart-glow)"
+            />
+          ) : null}
           {points.map((point, index) => {
             const date = new Date(point.date);
-            const color = index === 0 || point.total >= points[index - 1].total ? "#16865b" : "#d94b4b";
             const isLatest = index === points.length - 1;
             return (
               <g key={point.date}>
                 <title>{`${date.toLocaleDateString("en-IN", { dateStyle: "medium" })}: ${formatCurrency(point.total)}`}</title>
-                {isLatest ? <circle cx={point.x} cy={point.y} r="11" fill={color} fillOpacity="0.14" /> : null}
-                <circle cx={point.x} cy={point.y} r={isLatest ? 5 : 4} fill="white" stroke={color} strokeWidth="2.5" />
-                <text x={point.x} y={chartHeight - 12} textAnchor="middle" fill="#606962" fontSize="11" fontWeight={isLatest ? "700" : "500"}>
+                {isLatest ? <circle cx={point.x} cy={point.y} r="12" fill="#55f2c4" fillOpacity="0.14" /> : null}
+                <circle cx={point.x} cy={point.y} r={isLatest ? 5 : 3.5} fill="#092326" stroke="#8dffe1" strokeWidth="2.5" />
+                <text x={point.x} y={chartHeight - 12} textAnchor="middle" fill="#c1d9d3" fontSize="11" fontWeight={isLatest ? "700" : "500"}>
                   {date.toLocaleDateString("en-IN", { weekday: "short" })}
                 </text>
               </g>
@@ -233,9 +257,9 @@ function SalesChart({ data }: { data: DashboardDto["dailySales"] }) {
           })}
         </svg>
       )}
-      <div className="mt-1 flex items-center justify-end gap-4 text-[11px] text-stone-500">
-        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#16865b]" />Up</span>
-        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#d94b4b]" />Down</span>
+      <div className="mt-1 flex items-center justify-end gap-4 text-[11px] text-emerald-50/60">
+        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#55f2c4]" />Revenue trend</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-[#16a88a]" />Daily sales</span>
       </div>
     </div>
   );

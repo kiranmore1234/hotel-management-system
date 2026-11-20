@@ -11,6 +11,7 @@ import type { CategoryDto } from "@/types";
 export default function PublicMenuPage() {
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedType, setSelectedType] = useState<"All" | "Veg" | "NonVeg">("All");
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
@@ -30,9 +31,20 @@ export default function PublicMenuPage() {
     };
   }, []);
 
+  const categoriesWithPhotos = useMemo(
+    () => categories
+      .map((category) => ({ ...category, items: category.items.filter((item) => getDishPhoto(item) !== null) }))
+      .filter((category) => category.items.length > 0),
+    [categories]
+  );
   const visibleCategories = useMemo(
-    () => categories.filter((category) => selectedCategory === "All" || category.name === selectedCategory),
-    [categories, selectedCategory]
+    () => categoriesWithPhotos
+      .map((category) => ({
+        ...category,
+        items: category.items.filter((item) => selectedType === "All" || item.vegType === selectedType),
+      }))
+      .filter((category) => category.items.length > 0 && (selectedCategory === "All" || category.name === selectedCategory)),
+    [categoriesWithPhotos, selectedCategory, selectedType]
   );
 
   return (
@@ -45,7 +57,7 @@ export default function PublicMenuPage() {
               <h1 className="font-display text-5xl font-semibold sm:text-6xl">Our menu</h1>
               <p className="mt-4 max-w-xl text-sm leading-6 text-white/70 sm:text-base">A little something for every appetite. Explore what we’re serving today.</p>
             </div>
-            {status === "ready" ? <p className="text-sm text-white/65">{categories.reduce((count, category) => count + category.items.length, 0)} dishes</p> : null}
+            {status === "ready" ? <p className="text-sm text-white/65">{visibleCategories.reduce((count, category) => count + category.items.length, 0)} dishes</p> : null}
           </div>
         </div>
       </section>
@@ -76,6 +88,12 @@ export default function PublicMenuPage() {
             contain={false}
           />
           <MenuPhotoCard
+            src="/images/surmai-thali.png"
+            alt="Surmai thali served with rice, curry, and accompaniments"
+            title="Surmai Thali"
+            contain={false}
+          />
+          <MenuPhotoCard
             src="/images/niyojan-thali-promo.png"
             alt="Niyojan Resto thali special menu poster"
             title="Thali special"
@@ -93,9 +111,14 @@ export default function PublicMenuPage() {
         ) : null}
         {status === "ready" ? (
           <>
+            <div className="mb-4 flex gap-2 overflow-x-auto pb-2" aria-label="Filter menu by diet">
+              <CategoryButton active={selectedType === "All"} onClick={() => setSelectedType("All")}>All dishes</CategoryButton>
+              <CategoryButton active={selectedType === "Veg"} onClick={() => setSelectedType("Veg")}>Veg</CategoryButton>
+              <CategoryButton active={selectedType === "NonVeg"} onClick={() => setSelectedType("NonVeg")}>Non-veg</CategoryButton>
+            </div>
             <div className="mb-8 flex gap-2 overflow-x-auto pb-2" aria-label="Filter menu categories">
-              <CategoryButton active={selectedCategory === "All"} onClick={() => setSelectedCategory("All")}>Everything</CategoryButton>
-              {categories.map((category) => (
+              <CategoryButton active={selectedCategory === "All"} onClick={() => setSelectedCategory("All")}>All categories</CategoryButton>
+              {categoriesWithPhotos.map((category) => (
                 <CategoryButton key={category.id} active={selectedCategory === category.name} onClick={() => setSelectedCategory(category.name)}>
                   {category.name}
                 </CategoryButton>
@@ -111,14 +134,14 @@ export default function PublicMenuPage() {
                     </div>
                     <span className="text-xs text-[#879187]">{category.items.length} items</span>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {category.items.map((item) => {
                       const photoUrl = getDishPhoto(item);
                       return (
-                        <article key={item.id} className="overflow-hidden rounded-[22px] border border-[#e9e1d3] bg-white shadow-[0_8px_24px_rgba(39,48,39,0.04)]">
+                        <article key={item.id} className="food-card lift-card group h-fit overflow-hidden rounded-[22px] border border-[#e9e1d3] bg-white shadow-[0_8px_24px_rgba(39,48,39,0.04)]">
                           {photoUrl ? (
                             <div className="relative aspect-[16/10] overflow-hidden bg-[#efe8da]">
-                              <Image src={photoUrl} alt={item.name} fill unoptimized sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 100vw" className="object-cover" />
+                              <Image src={photoUrl} alt={item.name} fill unoptimized sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 100vw" className="food-image object-cover" />
                             </div>
                           ) : null}
                           <div className="flex min-h-28 items-start justify-between gap-3 p-5">
@@ -150,7 +173,7 @@ function MenuPhotoCard({ src, alt, title, contain = true, wide = false }: { src:
       href={src}
       target="_blank"
       rel="noreferrer"
-      className="group overflow-hidden rounded-[22px] border border-[#e9e1d3] bg-white shadow-[0_8px_24px_rgba(39,48,39,0.04)]"
+      className="group lift-card overflow-hidden rounded-[22px] border border-[#e9e1d3] bg-white shadow-[0_8px_24px_rgba(39,48,39,0.04)]"
     >
       <div className={`relative overflow-hidden bg-[#efe8da] ${wide ? "aspect-[3/1]" : "aspect-[4/5]"} ${contain ? "p-2" : ""}`}>
         <Image
@@ -158,7 +181,7 @@ function MenuPhotoCard({ src, alt, title, contain = true, wide = false }: { src:
           alt={alt}
           fill
           sizes="(min-width: 1024px) 23vw, (min-width: 640px) 45vw, 100vw"
-          className={contain ? "object-contain transition group-hover:scale-[1.02]" : "object-cover transition group-hover:scale-[1.02]"}
+          className={contain ? "object-contain transition duration-500 group-hover:scale-105" : "object-cover transition duration-500 group-hover:scale-105"}
         />
       </div>
       <div className="flex items-center justify-between gap-2 px-4 py-3">

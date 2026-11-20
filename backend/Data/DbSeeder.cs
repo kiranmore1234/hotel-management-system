@@ -9,7 +9,10 @@ public static class DbSeeder
     public static async Task SeedAsync(AppDbContext db)
     {
         await db.Database.EnsureCreatedAsync();
-        await EnsureUserJobTitleColumnAsync(db);
+        if (db.Database.IsSqlite())
+            await EnsureUserJobTitleColumnAsync(db);
+
+        await ClearPlaceholderMenuImagesAsync(db);
         var restaurantSettings = await db.Settings.FirstOrDefaultAsync();
         if (restaurantSettings is not null)
         {
@@ -46,34 +49,69 @@ public static class DbSeeder
                 await db.SaveChangesAsync();
         }
 
-        await db.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS "StaffAttendance" (
-                "Id" INTEGER NOT NULL CONSTRAINT "PK_StaffAttendance" PRIMARY KEY AUTOINCREMENT,
-                "UserId" INTEGER NOT NULL,
-                "WorkDate" TEXT NOT NULL,
-                "Status" TEXT NOT NULL,
-                "CheckIn" TEXT NULL,
-                "CheckOut" TEXT NULL,
-                "Notes" TEXT NULL,
-                "RecordedByUserId" INTEGER NOT NULL,
-                CONSTRAINT "FK_StaffAttendance_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
-                CONSTRAINT "FK_StaffAttendance_Users_RecordedByUserId" FOREIGN KEY ("RecordedByUserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS "IX_StaffAttendance_UserId_WorkDate"
-                ON "StaffAttendance" ("UserId", "WorkDate");
-            """);
+        if (db.Database.IsSqlite())
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TABLE IF NOT EXISTS "StaffAttendance" (
+                    "Id" INTEGER NOT NULL CONSTRAINT "PK_StaffAttendance" PRIMARY KEY AUTOINCREMENT,
+                    "UserId" INTEGER NOT NULL,
+                    "StaffName" TEXT NULL,
+                    "WorkDate" TEXT NOT NULL,
+                    "Status" TEXT NOT NULL,
+                    "CheckIn" TEXT NULL,
+                    "CheckOut" TEXT NULL,
+                    "MarkedAt" TEXT NULL,
+                    "Notes" TEXT NULL,
+                    "RecordedByUserId" INTEGER NOT NULL,
+                    CONSTRAINT "FK_StaffAttendance_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT,
+                    CONSTRAINT "FK_StaffAttendance_Users_RecordedByUserId" FOREIGN KEY ("RecordedByUserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_StaffAttendance_UserId_WorkDate"
+                    ON "StaffAttendance" ("UserId", "WorkDate");
+                """);
+            await EnsureSqliteAttendanceMarkedAtColumnAsync(db);
+            await EnsureSqliteAttendanceStaffNameColumnAsync(db);
+            await db.Database.ExecuteSqlRawAsync("""
+                UPDATE "StaffAttendance"
+                SET "StaffName" = (
+                    SELECT "Name" FROM "Users" WHERE "Users"."Id" = "StaffAttendance"."UserId"
+                )
+                WHERE "StaffName" IS NULL;
+                """);
+        }
+        else if (db.Database.IsSqlServer())
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                IF COL_LENGTH(N'dbo.StaffAttendance', N'MarkedAt') IS NULL
+                    ALTER TABLE [StaffAttendance] ADD [MarkedAt] datetime2 NULL;
+                """);
+            await db.Database.ExecuteSqlRawAsync("""
+                IF COL_LENGTH(N'dbo.StaffAttendance', N'StaffName') IS NULL
+                    ALTER TABLE [StaffAttendance] ADD [StaffName] nvarchar(100) NULL;
+                """);
+            await db.Database.ExecuteSqlRawAsync("""
+                UPDATE attendance
+                SET [StaffName] = staff.[Name]
+                FROM [dbo].[StaffAttendance] AS attendance
+                INNER JOIN [dbo].[Users] AS staff ON staff.[Id] = attendance.[UserId]
+                WHERE attendance.[StaffName] IS NULL;
+                """);
+        }
         await SeedRegionalMenuAsync(db);
-        await DeactivateNonVegAndEggMenuAsync(db);
+        await SeedThaliMenuAsync(db);
+        await ReactivateNonVegMenuAsync(db);
 
         if (await db.Users.AnyAsync())
+        {
+            await SeedAdditionalMenuItemsAsync(db);
             return;
+        }
 
         var admin = new User
         {
             Name = "Admin",
             Username = "admin",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
-            PinHash = BCrypt.Net.BCrypt.HashPassword("1234"),
             Role = UserRole.Admin,
             Phone = "9999999999"
         };
@@ -83,22 +121,11 @@ public static class DbSeeder
             Name = "Manager",
             Username = "manager",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("manager123"),
-            PinHash = BCrypt.Net.BCrypt.HashPassword("2222"),
             Role = UserRole.Manager,
             Phone = "9888888888"
         };
 
-        var captain = new User
-        {
-            Name = "Ravi Captain",
-            Username = "captain",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("captain123"),
-            PinHash = BCrypt.Net.BCrypt.HashPassword("1111"),
-            Role = UserRole.Captain,
-            Phone = "9777777777"
-        };
-
-        db.Users.AddRange(admin, manager, captain);
+        db.Users.AddRange(admin, manager);
 
         var acHall = new Floor { Name = "AC Hall", SortOrder = 1 };
         var nonAc = new Floor { Name = "Non-AC", SortOrder = 2 };
@@ -154,7 +181,7 @@ public static class DbSeeder
         });
 
         await db.SaveChangesAsync();
-        await AddMissingMenuImagesAsync(db);
+        await SeedAdditionalMenuItemsAsync(db);
     }
 
     private static async Task EnsureUserJobTitleColumnAsync(AppDbContext db)
@@ -190,6 +217,72 @@ public static class DbSeeder
         }
     }
 
+    private static async Task EnsureSqliteAttendanceMarkedAtColumnAsync(AppDbContext db)
+    {
+        var connection = db.Database.GetDbConnection();
+        var closeConnection = connection.State != System.Data.ConnectionState.Open;
+        if (closeConnection)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(\"StaffAttendance\")";
+            await using var reader = await command.ExecuteReaderAsync();
+            var hasMarkedAt = false;
+            while (await reader.ReadAsync())
+            {
+                if (reader.GetString(1) == "MarkedAt")
+                {
+                    hasMarkedAt = true;
+                    break;
+                }
+            }
+
+            await reader.DisposeAsync();
+            if (!hasMarkedAt)
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"StaffAttendance\" ADD COLUMN \"MarkedAt\" TEXT NULL");
+        }
+        finally
+        {
+            if (closeConnection)
+                await connection.CloseAsync();
+        }
+    }
+
+    private static async Task EnsureSqliteAttendanceStaffNameColumnAsync(AppDbContext db)
+    {
+        var connection = db.Database.GetDbConnection();
+        var closeConnection = connection.State != System.Data.ConnectionState.Open;
+        if (closeConnection)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(\"StaffAttendance\")";
+            await using var reader = await command.ExecuteReaderAsync();
+            var hasStaffName = false;
+            while (await reader.ReadAsync())
+            {
+                if (reader.GetString(1) == "StaffName")
+                {
+                    hasStaffName = true;
+                    break;
+                }
+            }
+
+            await reader.DisposeAsync();
+            if (!hasStaffName)
+                await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"StaffAttendance\" ADD COLUMN \"StaffName\" TEXT NULL");
+        }
+        finally
+        {
+            if (closeConnection)
+                await connection.CloseAsync();
+        }
+    }
+
     private static async Task SeedRegionalMenuAsync(AppDbContext db)
     {
         var maharashtrian = await db.Categories.FirstOrDefaultAsync(c => c.Name == "Maharashtrian");
@@ -210,19 +303,19 @@ public static class DbSeeder
 
         var dishes = new[]
         {
-            new { CategoryId = maharashtrian.Id, Name = "Misal Pav", Description = "Sprouted bean curry with farsan and pav.", Price = 160m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = maharashtrian.Id, Name = "Vada Pav", Description = "Spiced potato fritter in a soft pav.", Price = 60m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = maharashtrian.Id, Name = "Puran Poli", Description = "Sweet lentil-stuffed flatbread.", Price = 90m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = maharashtrian.Id, Name = "Vada Pav", Description = "Mumbai-style potato fritter tucked into a soft pav.", Price = 60m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1606491956689-2ea866880c84?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = maharashtrian.Id, Name = "Mix Veg", Description = "Seasonal vegetables cooked with a Maharashtrian masala.", Price = 190m, VegType = VegType.Veg, ImageUrl = "" },
-            new { CategoryId = maharashtrian.Id, Name = "Zunka Bhakri", Description = "Gram-flour zunka served with jowar bhakri.", Price = 150m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = maharashtrian.Id, Name = "Kolhapuri Chicken", Description = "Chicken in a bold Kolhapuri spice gravy.", Price = 290m, VegType = VegType.NonVeg, ImageUrl = "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = southIndian.Id, Name = "Idli Sambar", Description = "Steamed rice cakes with sambar and chutney.", Price = 100m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = southIndian.Id, Name = "Masala Dosa", Description = "Crisp dosa filled with spiced potato.", Price = 150m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1630383249896-424e482df921?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = southIndian.Id, Name = "Medu Vada", Description = "Crisp lentil doughnuts with coconut chutney.", Price = 110m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = southIndian.Id, Name = "Vegetable Uttapam", Description = "Soft rice pancake topped with vegetables.", Price = 140m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1630383249896-424e482df921?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = southIndian.Id, Name = "Lemon Rice", Description = "South Indian tempered rice with lemon.", Price = 130m, VegType = VegType.Veg, ImageUrl = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80" },
-            new { CategoryId = southIndian.Id, Name = "Chicken Chettinad", Description = "Chicken curry with roasted Chettinad spices.", Price = 310m, VegType = VegType.NonVeg, ImageUrl = "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=900&q=80" },
+            new { CategoryId = maharashtrian.Id, Name = "Misal Pav", Description = "Sprouted bean curry with farsan and pav.", Price = 160m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = maharashtrian.Id, Name = "Vada Pav", Description = "Spiced potato fritter in a soft pav.", Price = 60m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = maharashtrian.Id, Name = "Puran Poli", Description = "Sweet lentil-stuffed flatbread.", Price = 90m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = maharashtrian.Id, Name = "Vada Pav", Description = "Mumbai-style potato fritter tucked into a soft pav.", Price = 60m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = maharashtrian.Id, Name = "Mix Veg", Description = "Seasonal vegetables cooked with a Maharashtrian masala.", Price = 190m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = maharashtrian.Id, Name = "Zunka Bhakri", Description = "Gram-flour zunka served with jowar bhakri.", Price = 150m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = maharashtrian.Id, Name = "Kolhapuri Chicken", Description = "Chicken in a bold Kolhapuri spice gravy.", Price = 290m, VegType = VegType.NonVeg, ImageUrl = (string?)null },
+            new { CategoryId = southIndian.Id, Name = "Idli Sambar", Description = "Steamed rice cakes with sambar and chutney.", Price = 100m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = southIndian.Id, Name = "Masala Dosa", Description = "Crisp dosa filled with spiced potato.", Price = 150m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = southIndian.Id, Name = "Medu Vada", Description = "Crisp lentil doughnuts with coconut chutney.", Price = 110m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = southIndian.Id, Name = "Vegetable Uttapam", Description = "Soft rice pancake topped with vegetables.", Price = 140m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = southIndian.Id, Name = "Lemon Rice", Description = "South Indian tempered rice with lemon.", Price = 130m, VegType = VegType.Veg, ImageUrl = (string?)null },
+            new { CategoryId = southIndian.Id, Name = "Chicken Chettinad", Description = "Chicken curry with roasted Chettinad spices.", Price = 310m, VegType = VegType.NonVeg, ImageUrl = (string?)null },
         };
 
         foreach (var dish in dishes)
@@ -243,56 +336,146 @@ public static class DbSeeder
         }
 
         await db.SaveChangesAsync();
-        await AddMissingMenuImagesAsync(db);
     }
 
-    private static async Task DeactivateNonVegAndEggMenuAsync(AppDbContext db)
+    private static async Task SeedThaliMenuAsync(AppDbContext db)
     {
-        var items = await db.MenuItems
-            .Where(item => item.IsActive && item.VegType != VegType.Veg)
-            .ToListAsync();
-
-        foreach (var item in items)
+        var thalis = await db.Categories.FirstOrDefaultAsync(category => category.Name == "Thalis");
+        if (thalis is null)
         {
-            item.IsActive = false;
+            thalis = new Category { Name = "Thalis", KitchenSection = "Indian", SortOrder = 9 };
+            db.Categories.Add(thalis);
+            await db.SaveChangesAsync();
         }
 
-        var eggCategory = await db.Categories.FirstOrDefaultAsync(category => category.Name == "Egg Specials");
-        if (eggCategory is not null)
-            eggCategory.IsActive = false;
+        var dishes = new[]
+        {
+            new { Name = "Veg Thali", Description = "A complete vegetarian meal served with roti, rice, and accompaniments.", Price = 249m, VegType = VegType.Veg },
+            new { Name = "Chicken Thali", Description = "Chicken curry served with roti, rice, and accompaniments.", Price = 299m, VegType = VegType.NonVeg },
+            new { Name = "Mutton Thali", Description = "Mutton curry served with roti, rice, and accompaniments.", Price = 449m, VegType = VegType.NonVeg },
+            new { Name = "Surmai Thali", Description = "A rich coastal special with surmai served with rice, roti, and sides.", Price = 489m, VegType = VegType.NonVeg },
+            new { Name = "Niyojan SPL Chicken Thali", Description = "Niyojan’s special chicken thali with roti, rice, and accompaniments.", Price = 399m, VegType = VegType.NonVeg },
+            new { Name = "Niyojan SPL Mutton Thali", Description = "Niyojan’s special mutton thali with roti, rice, and accompaniments.", Price = 559m, VegType = VegType.NonVeg },
+        };
+
+        foreach (var dish in dishes)
+        {
+            var item = await db.MenuItems.FirstOrDefaultAsync(menuItem =>
+                menuItem.CategoryId == thalis.Id &&
+                menuItem.Name.ToLower() == dish.Name.ToLower());
+
+            if (item is not null)
+            {
+                if (dish.Name.Equals("Surmai Thali", StringComparison.OrdinalIgnoreCase) &&
+                    item.ImageUrl != "/images/surmai-thali.png")
+                    item.ImageUrl = "/images/surmai-thali.png";
+                continue;
+            }
+
+            db.MenuItems.Add(new MenuItem
+            {
+                CategoryId = thalis.Id,
+                Name = dish.Name,
+                Description = dish.Description,
+                Price = dish.Price,
+                VegType = dish.VegType,
+                ImageUrl = dish.Name.Equals("Surmai Thali", StringComparison.OrdinalIgnoreCase)
+                    ? "/images/surmai-thali.png"
+                    : "/images/niyojan-signature-thali.png",
+                TaxPercent = 5,
+            });
+        }
 
         await db.SaveChangesAsync();
     }
 
-    private static async Task AddMissingMenuImagesAsync(AppDbContext db)
+    private static async Task SeedAdditionalMenuItemsAsync(AppDbContext db)
     {
-        const string vegPhoto = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80";
-        const string nonVegPhoto = "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=900&q=80";
-        const string rotiPhoto = "https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=900&q=80";
-        const string ricePhoto = "https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=900&q=80";
-        const string drinksPhoto = "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=900&q=80";
-        const string dessertPhoto = "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80";
+        var drinks = await GetOrCreateCategoryAsync(db, "Drinks", "Bar", 5);
+        var roti = await GetOrCreateCategoryAsync(db, "Roti", "Tandoor", 3);
+        var maharashtrian = await GetOrCreateCategoryAsync(db, "Maharashtrian", "Indian", 7);
+        var mainCourse = await GetOrCreateCategoryAsync(db, "Main Course", "Indian", 2);
 
-        var itemsWithoutImages = await db.MenuItems
-            .Include(item => item.Category)
-            .Where(item => item.ImageUrl == null || item.ImageUrl == "")
-            .ToListAsync();
-
-        foreach (var item in itemsWithoutImages)
+        var dishes = new[]
         {
-            item.ImageUrl = item.VegType == VegType.NonVeg
-                ? nonVegPhoto
-                : item.Category.Name switch
-                {
-                    "Roti" => rotiPhoto,
-                    "Rice" => ricePhoto,
-                    "Drinks" => drinksPhoto,
-                    "Dessert" => dessertPhoto,
-                    _ => vegPhoto,
-                };
+            new { CategoryId = drinks.Id, Name = "Water Bottle", Description = "1 litre bottled drinking water.", Price = 20m },
+            new { CategoryId = drinks.Id, Name = "Cold Drink (₹20)", Description = "Cold drink.", Price = 20m },
+            new { CategoryId = drinks.Id, Name = "Cold Drink (₹40)", Description = "Cold drink.", Price = 40m },
+            new { CategoryId = maharashtrian.Id, Name = "Bhajri Bhakari", Description = "Traditional bhajri flour flatbread.", Price = 35m },
+            new { CategoryId = roti.Id, Name = "Jawari Bhakari", Description = "Traditional jawari flour flatbread.", Price = 35m },
+            new { CategoryId = roti.Id, Name = "Chapati", Description = "Soft whole-wheat flatbread.", Price = 20m },
+            new { CategoryId = mainCourse.Id, Name = "Alani Varan", Description = "Plain, lightly seasoned lentil dal.", Price = 80m },
+        };
+
+        foreach (var dish in dishes)
+        {
+            if (await db.MenuItems.AnyAsync(item =>
+                    item.CategoryId == dish.CategoryId && item.Name == dish.Name))
+                continue;
+
+            db.MenuItems.Add(new MenuItem
+            {
+                CategoryId = dish.CategoryId,
+                Name = dish.Name,
+                Description = dish.Description,
+                Price = dish.Price,
+                VegType = VegType.Veg,
+                TaxPercent = 5,
+            });
         }
 
-        if (itemsWithoutImages.Count > 0)
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<Category> GetOrCreateCategoryAsync(
+        AppDbContext db,
+        string name,
+        string kitchenSection,
+        int sortOrder)
+    {
+        var category = await db.Categories.FirstOrDefaultAsync(item => item.Name == name);
+        if (category is not null)
+            return category;
+
+        category = new Category { Name = name, KitchenSection = kitchenSection, SortOrder = sortOrder };
+        db.Categories.Add(category);
+        await db.SaveChangesAsync();
+        return category;
+    }
+
+    private static async Task ReactivateNonVegMenuAsync(AppDbContext db)
+    {
+        var inactiveNonVegItems = await db.MenuItems
+            .Where(item => !item.IsActive && item.IsAvailable && item.VegType == VegType.NonVeg)
+            .ToListAsync();
+
+        foreach (var item in inactiveNonVegItems)
+            item.IsActive = true;
+
+        if (inactiveNonVegItems.Count > 0)
+            await db.SaveChangesAsync();
+    }
+
+    private static async Task ClearPlaceholderMenuImagesAsync(AppDbContext db)
+    {
+        var placeholderPhotos = new[]
+        {
+            "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80",
+        };
+        var itemsWithPlaceholderPhotos = await db.MenuItems
+            .Where(item => item.ImageUrl != null && placeholderPhotos.Contains(item.ImageUrl))
+            .ToListAsync();
+
+        foreach (var item in itemsWithPlaceholderPhotos)
+            item.ImageUrl = null;
+
+        if (itemsWithPlaceholderPhotos.Count > 0)
             await db.SaveChangesAsync();
     }
 }

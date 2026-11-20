@@ -5,8 +5,7 @@ namespace Bramhand.Api.DTOs;
 
 public record LoginRequest(
     [Required] string Username,
-    string? Password,
-    string? Pin);
+    [Required] string Password);
 
 public record LoginResponse(
     string Token,
@@ -54,7 +53,8 @@ public record CreateMenuItemRequest(
     decimal TaxPercent,
     VegType VegType,
     bool HasHalfFull,
-    bool IsAvailable);
+    bool IsAvailable,
+    string? ImageUrl = null);
 
 public record UpdateMenuItemRequest(
     string Name,
@@ -64,7 +64,8 @@ public record UpdateMenuItemRequest(
     decimal TaxPercent,
     VegType VegType,
     bool HasHalfFull,
-    bool IsAvailable);
+    bool IsAvailable,
+    string? ImageUrl = null);
 
 public record CreateOrderItemRequest(int MenuItemId, int Quantity, string? Note, bool IsHalf);
 
@@ -76,6 +77,8 @@ public record CreateOrderRequest(
     List<CreateOrderItemRequest> Items);
 
 public record AddOrderItemsRequest(List<CreateOrderItemRequest> Items);
+
+public record UpdateOrderItemRequest(int Quantity, string? Note);
 
 public record OrderItemDto(
     int Id,

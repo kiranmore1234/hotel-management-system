@@ -16,81 +16,108 @@ namespace Bramhand.Api.Controllers;
 public class StaffController(AppDbContext db, IAuditService audit) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetStaff()
+    public async Task<ActionResult<IReadOnlyList<StaffDto>>> GetStaff(
+        [FromQuery] string? search,
+        [FromQuery] bool? active)
     {
-        var staff = await db.Users
-            .Where(user => user.Role != UserRole.Admin)
-            .OrderBy(user => user.Role)
+        var staff = db.Users
+            .AsNoTracking()
+            .Where(user => user.Role != UserRole.Admin);
+
+        if (active.HasValue)
+            staff = staff.Where(user => user.IsActive == active.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            staff = staff.Where(user =>
+                user.Name.Contains(term) ||
+                user.Username.Contains(term) ||
+                (user.Phone != null && user.Phone.Contains(term)) ||
+                (user.JobTitle != null && user.JobTitle.Contains(term)));
+        }
+
+        var result = await staff
+            .OrderByDescending(user => user.IsActive)
             .ThenBy(user => user.Name)
-            .Select(user => new StaffDto(user.Id, user.Name, user.Username, user.Phone, user.JobTitle ?? user.Role.ToString(), user.IsActive))
+            .Select(user => new StaffDto(
+                user.Id,
+                user.Name,
+                user.Username,
+                user.Phone,
+                user.JobTitle ?? user.Role.ToString(),
+                user.IsActive))
             .ToListAsync();
-        return Ok(staff);
+
+        return Ok(result);
     }
 
     [HttpPost]
-    [Authorize(Roles = RoleNames.AdminOrManager)]
-    public async Task<IActionResult> CreateStaff([FromBody] CreateStaffRequest request)
+    public async Task<ActionResult<StaffDto>> CreateStaff([FromBody] CreateStaffRequest request)
     {
         var (role, jobTitle) = ParseStaffRole(request.Role);
         if (role is null)
-            return BadRequest(new { message = "Provide a valid staff role. Admin cannot be assigned to staff accounts." });
+            return BadRequest(new { message = "Choose a valid staff role. Admin cannot be created here." });
         if (request.InitialAttendance is not null &&
             (request.AttendanceDate is null || !IsAttendanceStatus(request.InitialAttendance)))
-            return BadRequest(new { message = "Choose a valid attendance date and status" });
+            return BadRequest(new { message = "Choose a valid attendance date and status." });
 
         var username = request.Username.Trim();
         if (await db.Users.AnyAsync(user => user.Username == username))
-            return Conflict(new { message = "That username is already in use" });
+            return Conflict(new { message = "That username is already in use." });
 
         var temporaryPassword = string.IsNullOrWhiteSpace(request.Password)
-            ? Convert.ToBase64String(RandomNumberGenerator.GetBytes(24))
+            ? CreateTemporaryPassword()
             : request.Password;
         var user = new User
         {
             Name = request.Name.Trim(),
             Username = username,
-            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            Phone = NormalizeOptional(request.Phone),
             JobTitle = jobTitle,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(temporaryPassword),
-            PinHash = string.IsNullOrWhiteSpace(request.Pin) ? null : BCrypt.Net.BCrypt.HashPassword(request.Pin),
+            PinHash = string.IsNullOrWhiteSpace(request.Pin)
+                ? null
+                : BCrypt.Net.BCrypt.HashPassword(request.Pin),
             Role = role.Value,
         };
+
         db.Users.Add(user);
         if (request.InitialAttendance is not null && request.AttendanceDate is { } attendanceDate)
         {
-            var attendance = new StaffAttendance
+            db.StaffAttendance.Add(new StaffAttendance
             {
                 User = user,
+                StaffName = user.Name,
                 WorkDate = attendanceDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
                 Status = request.InitialAttendance,
-                CheckIn = request.InitialAttendance is "Present" or "Half day" ? DateTime.UtcNow : null,
+                MarkedAt = DateTime.UtcNow,
                 RecordedByUserId = User.GetUserId(),
-            };
-            db.StaffAttendance.Add(attendance);
+            });
         }
+
         await db.SaveChangesAsync();
         await audit.LogAsync(User.GetUserId(), "STAFF_CREATE", $"Created {user.JobTitle ?? user.Role.ToString()} account {user.Username}");
         return Ok(ToStaffDto(user) with { TemporaryPassword = temporaryPassword });
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = RoleNames.AdminOrManager)]
-    public async Task<IActionResult> UpdateStaff(int id, [FromBody] UpdateStaffRequest request)
+    public async Task<ActionResult<StaffDto>> UpdateStaff(int id, [FromBody] UpdateStaffRequest request)
     {
         var (role, jobTitle) = ParseStaffRole(request.Role);
         if (role is null)
-            return BadRequest(new { message = "Provide a valid staff role. Admin cannot be assigned to staff accounts." });
+            return BadRequest(new { message = "Choose a valid staff role. Admin cannot be assigned here." });
 
         var user = await db.Users.FirstOrDefaultAsync(user => user.Id == id && user.Role != UserRole.Admin);
-        if (user is null) return NotFound();
+        if (user is null) return NotFound(new { message = "Staff member not found." });
 
         var username = request.Username.Trim();
         if (await db.Users.AnyAsync(other => other.Id != id && other.Username == username))
-            return Conflict(new { message = "That username is already in use" });
+            return Conflict(new { message = "That username is already in use." });
 
         user.Name = request.Name.Trim();
         user.Username = username;
-        user.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        user.Phone = NormalizeOptional(request.Phone);
         user.Role = role.Value;
         user.JobTitle = jobTitle;
         if (!string.IsNullOrWhiteSpace(request.Password))
@@ -103,12 +130,29 @@ public class StaffController(AppDbContext db, IAuditService audit) : ControllerB
         return Ok(ToStaffDto(user));
     }
 
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> ArchiveStaff(int id)
+    {
+        var currentUserId = User.GetUserId();
+        if (id == currentUserId)
+            return BadRequest(new { message = "You cannot archive your own account." });
+
+        var user = await db.Users.FirstOrDefaultAsync(user => user.Id == id && user.Role != UserRole.Admin);
+        if (user is null) return NotFound(new { message = "Staff member not found." });
+        if (!user.IsActive) return NoContent();
+
+        user.IsActive = false;
+        await db.SaveChangesAsync();
+        await audit.LogAsync(currentUserId, "STAFF_ARCHIVE", $"Archived staff account {user.Username}; history retained");
+        return NoContent();
+    }
+
     [HttpPut("{id:int}/active")]
     [Authorize(Roles = RoleNames.Admin)]
-    public async Task<IActionResult> SetStaffActive(int id, [FromBody] SetStaffActiveRequest request)
+    public async Task<ActionResult<StaffDto>> SetStaffActive(int id, [FromBody] SetStaffActiveRequest request)
     {
         var user = await db.Users.FirstOrDefaultAsync(user => user.Id == id && user.Role != UserRole.Admin);
-        if (user is null) return NotFound();
+        if (user is null) return NotFound(new { message = "Staff member not found." });
 
         user.IsActive = request.IsActive;
         await db.SaveChangesAsync();
@@ -117,44 +161,48 @@ public class StaffController(AppDbContext db, IAuditService audit) : ControllerB
     }
 
     [HttpPost("{id:int}/password-reset")]
-    [Authorize(Roles = RoleNames.AdminOrManager)]
-    public async Task<IActionResult> ResetStaffPassword(int id)
+    public async Task<ActionResult<TemporaryPasswordDto>> ResetStaffPassword(int id)
     {
         var user = await db.Users.FirstOrDefaultAsync(user => user.Id == id && user.Role != UserRole.Admin);
-        if (user is null) return NotFound();
+        if (user is null) return NotFound(new { message = "Staff member not found." });
+        if (!user.IsActive)
+            return Conflict(new { message = "Archived accounts must be reactivated before resetting their password." });
 
-        var temporaryPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
+        var temporaryPassword = CreateTemporaryPassword();
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(temporaryPassword);
         user.PinHash = null;
         await db.SaveChangesAsync();
         await audit.LogAsync(User.GetUserId(), "STAFF_PASSWORD_RESET", $"Reset password for staff account {user.Username}");
-        return Ok(new { temporaryPassword });
+        return Ok(new TemporaryPasswordDto(temporaryPassword));
     }
 
     [HttpGet("attendance")]
-    public async Task<IActionResult> GetAttendance(
+    public async Task<ActionResult<IReadOnlyList<AttendanceDto>>> GetAttendance(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         [FromQuery] string? name,
-        [FromQuery] DateOnly? date)
+        [FromQuery] DateOnly? date,
+        [FromQuery] int? userId)
     {
         var fromDate = from ?? date ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var toDate = to ?? date ?? fromDate;
         if (fromDate > toDate)
-            return BadRequest(new { message = "The start date must be on or before the end date" });
+            return BadRequest(new { message = "The start date must be on or before the end date." });
 
         var start = fromDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var end = toDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var endExclusive = toDate.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var records = db.StaffAttendance
             .AsNoTracking()
-            .Include(record => record.User)
-            .Where(record => record.WorkDate >= start && record.WorkDate <= end);
+            .Where(record => record.WorkDate >= start && record.WorkDate < endExclusive);
+
+        if (userId.HasValue)
+            records = records.Where(record => record.UserId == userId.Value);
 
         if (!string.IsNullOrWhiteSpace(name))
         {
-            var search = name.Trim();
+            var term = name.Trim();
             records = records.Where(record =>
-                record.User.Name.Contains(search) || record.User.Username.Contains(search));
+                record.User.Name.Contains(term) || record.User.Username.Contains(term));
         }
 
         var result = await records
@@ -169,32 +217,69 @@ public class StaffController(AppDbContext db, IAuditService audit) : ControllerB
                 record.Status,
                 record.CheckIn,
                 record.CheckOut,
-                record.Notes))
+                record.Notes,
+                record.MarkedAt))
             .ToListAsync();
 
         return Ok(result);
     }
 
+    [HttpGet("attendance/summary")]
+    public async Task<ActionResult<IReadOnlyList<AttendanceSummaryDto>>> GetAttendanceSummary(
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        [FromQuery] int? userId)
+    {
+        if (from == default || to == default || from > to)
+            return BadRequest(new { message = "Choose a valid date range." });
+
+        var start = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var endExclusive = to.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var records = db.StaffAttendance
+            .AsNoTracking()
+            .Where(record => record.WorkDate >= start && record.WorkDate < endExclusive);
+
+        if (userId.HasValue)
+            records = records.Where(record => record.UserId == userId.Value);
+
+        var summary = await records
+            .GroupBy(record => record.UserId)
+            .Select(group => new AttendanceSummaryDto(
+                group.Key,
+                group.Count(record => record.Status == "Present"),
+                group.Count(record => record.Status == "Half day"),
+                group.Count(record => record.Status == "Leave"),
+                group.Count(record => record.Status == "Absent"),
+                group.Count()))
+            .ToListAsync();
+
+        return Ok(summary);
+    }
+
     [HttpPut("attendance")]
-    public async Task<IActionResult> SetAttendance([FromBody] SetAttendanceRequest request)
+    public async Task<ActionResult<AttendanceDto>> SetAttendance([FromBody] SetAttendanceRequest request)
     {
         if (request.WorkDate == default)
-            return BadRequest(new { message = "Choose a valid attendance date" });
+            return BadRequest(new { message = "Choose a valid attendance date." });
         if (!IsAttendanceStatus(request.Status))
-            return BadRequest(new { message = "Attendance status must be Present, Absent, Leave, or Half day" });
+            return BadRequest(new { message = "Attendance status must be Present, Absent, Leave, or Half day." });
+        if (request.Notes?.Length > 250)
+            return BadRequest(new { message = "Attendance notes must be 250 characters or fewer." });
+        if (request.CheckIn.HasValue && request.CheckOut.HasValue && request.CheckOut <= request.CheckIn)
+            return BadRequest(new { message = "Check-out must be later than check-in." });
 
-        var user = await db.Users.FirstOrDefaultAsync(user =>
+        var staff = await db.Users.FirstOrDefaultAsync(user =>
             user.Id == request.UserId && user.IsActive && user.Role != UserRole.Admin);
-        if (user is null) return NotFound(new { message = "Active staff member not found" });
+        if (staff is null) return NotFound(new { message = "Active staff member not found." });
 
         var workDate = request.WorkDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var record = await db.StaffAttendance.FirstOrDefaultAsync(item =>
-            item.UserId == user.Id && item.WorkDate == workDate);
+            item.UserId == staff.Id && item.WorkDate == workDate);
         if (record is null)
         {
             record = new StaffAttendance
             {
-                UserId = user.Id,
+                UserId = staff.Id,
                 WorkDate = workDate,
                 RecordedByUserId = User.GetUserId(),
             };
@@ -202,8 +287,10 @@ public class StaffController(AppDbContext db, IAuditService audit) : ControllerB
         }
 
         record.Status = request.Status;
-        record.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+        record.StaffName = staff.Name;
+        record.Notes = NormalizeOptional(request.Notes);
         record.RecordedByUserId = User.GetUserId();
+        record.MarkedAt = DateTime.UtcNow;
         if (request.Status is "Absent" or "Leave")
         {
             record.CheckIn = null;
@@ -211,12 +298,25 @@ public class StaffController(AppDbContext db, IAuditService audit) : ControllerB
         }
         else
         {
-            record.CheckIn ??= DateTime.UtcNow;
+            if (request.CheckIn.HasValue)
+                record.CheckIn = workDate.Add(request.CheckIn.Value.ToTimeSpan());
+            if (request.CheckOut.HasValue)
+                record.CheckOut = workDate.Add(request.CheckOut.Value.ToTimeSpan());
         }
 
         await db.SaveChangesAsync();
-        await audit.LogAsync(User.GetUserId(), "STAFF_ATTENDANCE", $"{user.Username} {request.Status} on {request.WorkDate}");
-        return Ok(new AttendanceDto(user.Id, user.Name, user.Username, user.JobTitle ?? user.Role.ToString(), request.WorkDate, record.Status, record.CheckIn, record.CheckOut, record.Notes));
+        await audit.LogAsync(User.GetUserId(), "STAFF_ATTENDANCE", $"{staff.Username} {request.Status} on {request.WorkDate}");
+        return Ok(new AttendanceDto(
+            staff.Id,
+            staff.Name,
+            staff.Username,
+            staff.JobTitle ?? staff.Role.ToString(),
+            request.WorkDate,
+            record.Status,
+            record.CheckIn,
+            record.CheckOut,
+            record.Notes,
+            record.MarkedAt));
     }
 
     private static (UserRole? Role, string? JobTitle) ParseStaffRole(string value)
@@ -237,6 +337,12 @@ public class StaffController(AppDbContext db, IAuditService audit) : ControllerB
 
     private static bool IsAttendanceStatus(string status)
         => status is "Present" or "Absent" or "Leave" or "Half day";
+
+    private static string? NormalizeOptional(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string CreateTemporaryPassword()
+        => Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
 }
 
 public record StaffDto(
@@ -257,13 +363,16 @@ public record AttendanceDto(
     string Status,
     DateTime? CheckIn,
     DateTime? CheckOut,
-    string? Notes);
+    string? Notes,
+    DateTime? MarkedAt);
 
+public record AttendanceSummaryDto(int UserId, int Present, int HalfDay, int Leave, int Absent, int TotalRecords);
+public record TemporaryPasswordDto(string TemporaryPassword);
 public record CreateStaffRequest(
     [Required, StringLength(100, MinimumLength = 2)] string Name,
     [Required, StringLength(50, MinimumLength = 3)] string Username,
-    string? Phone,
-    [MinLength(6)] string? Password,
+    [StringLength(30)] string? Phone,
+    [MinLength(8), StringLength(100)] string? Password,
     [RegularExpression(@"^\d{4}$")] string? Pin,
     [Required, StringLength(50, MinimumLength = 2)] string Role,
     string? InitialAttendance,
@@ -272,11 +381,17 @@ public record CreateStaffRequest(
 public record UpdateStaffRequest(
     [Required, StringLength(100, MinimumLength = 2)] string Name,
     [Required, StringLength(50, MinimumLength = 3)] string Username,
-    string? Phone,
-    [MinLength(6)] string? Password,
+    [StringLength(30)] string? Phone,
+    [MinLength(8), StringLength(100)] string? Password,
     [RegularExpression(@"^\d{4}$")] string? Pin,
     [Required, StringLength(50, MinimumLength = 2)] string Role);
 
 public record SetStaffActiveRequest(bool IsActive);
 
-public record SetAttendanceRequest(int UserId, DateOnly WorkDate, string Status, string? Notes);
+public record SetAttendanceRequest(
+    int UserId,
+    DateOnly WorkDate,
+    string Status,
+    [StringLength(250)] string? Notes,
+    TimeOnly? CheckIn = null,
+    TimeOnly? CheckOut = null);

@@ -10,7 +10,7 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: "Niyojan Resto | A Taste Worth Sharing",
-  description: "Explore the menu, discover our story, and plan your visit to Niyojan Resto.",
+  description: "Discover Niyojan Resto, our warm hospitality, and the food and service we love to share.",
 };
 
 export const viewport: Viewport = {

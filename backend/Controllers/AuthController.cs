@@ -1,5 +1,6 @@
 using Bramhand.Api.Data;
 using Bramhand.Api.DTOs;
+using Bramhand.Api.Models;
 using Bramhand.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,18 +20,15 @@ public class AuthController(
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
         var user = await db.Users.FirstOrDefaultAsync(u =>
-            u.Username == request.Username && u.IsActive);
+            u.Username == request.Username &&
+            u.IsActive &&
+            (u.Role == UserRole.Admin || u.Role == UserRole.Manager));
 
         if (user is null)
             return Unauthorized(new { message = "Invalid username or credentials" });
 
-        var valid = false;
-        if (!string.IsNullOrWhiteSpace(request.Pin) && !string.IsNullOrEmpty(user.PinHash))
-            valid = BCrypt.Net.BCrypt.Verify(request.Pin, user.PinHash);
-        else if (!string.IsNullOrWhiteSpace(request.Password))
-            valid = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
-
-        if (!valid)
+        if (string.IsNullOrWhiteSpace(request.Password) ||
+            !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return Unauthorized(new { message = "Invalid username or credentials" });
 
         var (token, expires) = tokenService.CreateToken(user);

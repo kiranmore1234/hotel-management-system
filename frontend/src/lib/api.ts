@@ -104,6 +104,15 @@ export const ordersApi = {
       method: "POST",
       body: JSON.stringify({ items }),
     }),
+  updateItem: (orderId: number, itemId: number, quantity: number, note: string) =>
+    api<OrderDto>(`/api/orders/${orderId}/items/${itemId}`, {
+      method: "PUT",
+      body: JSON.stringify({ quantity, note }),
+    }),
+  cancelItem: (orderId: number, itemId: number) =>
+    api<OrderDto>(`/api/orders/${orderId}/items/${itemId}`, {
+      method: "DELETE",
+    }),
 };
 
 export const billsApi = {

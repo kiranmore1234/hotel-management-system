@@ -11,7 +11,7 @@ type RestaurantProfile = {
   gstin: string | null;
 };
 
-export default function AboutPage() {
+export default function RestaurantProfilePage() {
   const [profile, setProfile] = useState<RestaurantProfile | null>(null);
   const [error, setError] = useState("");
 
@@ -25,7 +25,7 @@ export default function AboutPage() {
     <div className="max-w-3xl">
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase text-amber-700">Restaurant</p>
-        <h1 className="text-2xl font-bold text-stone-900">About</h1>
+        <h1 className="text-2xl font-bold text-stone-900">Restaurant profile</h1>
         <p className="text-sm text-stone-500">Restaurant identity and contact details.</p>
       </div>
       {error ? <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}

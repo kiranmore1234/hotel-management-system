@@ -45,11 +45,11 @@ export default function HomePage() {
               Find your next favourite, share another plate, and make a little more room around the table.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <Link href="/our-menu" className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#e5b76d] px-6 text-sm font-bold text-[#21372d] transition hover:bg-[#f0ca8a]">
-                Explore our menu <span aria-hidden="true" className="ml-2">↗</span>
+              <Link href="/about" className="inline-flex min-h-12 items-center justify-center rounded-full bg-[#e5b76d] px-6 text-sm font-bold text-[#21372d] transition hover:bg-[#f0ca8a]">
+                Discover About Us <span aria-hidden="true" className="ml-2">↗</span>
               </Link>
-              <Link href="/contact" className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/50 px-6 text-sm font-semibold text-white transition hover:bg-white/10">
-                Plan your visit
+              <Link href="/contact#reservation" className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/50 px-6 text-sm font-semibold text-white transition hover:bg-white/10">
+                Reserve a table
               </Link>
             </div>
             <div className="mt-12 flex items-center gap-3 text-sm text-white/75">
@@ -69,8 +69,8 @@ export default function HomePage() {
           <p className="mt-5 max-w-xl text-base leading-7 text-[#657268]">
             A meal is more than what’s on the plate. It’s the people around it, the stories that stretch into the evening, and the comfort of feeling right at home.
           </p>
-          <Link href="/story" className="mt-7 inline-flex min-h-11 items-center font-semibold text-[#8a5d2b] hover:text-[#173d32]">
-            A little about us <span aria-hidden="true" className="ml-2">→</span>
+          <Link href="/about" className="mt-7 inline-flex min-h-11 items-center font-semibold text-[#8a5d2b] hover:text-[#173d32]">
+            About Niyojan <span aria-hidden="true" className="ml-2">→</span>
           </Link>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -115,8 +115,8 @@ export default function HomePage() {
           <p className="mt-4 text-sm leading-6 text-[#657268]">
             Step inside for a relaxed meal, a family celebration, or an evening around the table.
           </p>
-          <Link href="/contact" className="mt-6 inline-flex min-h-11 items-center font-semibold text-[#8a5d2b] hover:text-[#173d32]">
-            Plan your visit <span aria-hidden="true" className="ml-2">→</span>
+          <Link href="/service" className="mt-6 inline-flex min-h-11 items-center font-semibold text-[#8a5d2b] hover:text-[#173d32]">
+            Explore our service <span aria-hidden="true" className="ml-2">→</span>
           </Link>
         </div>
       </section>
@@ -172,7 +172,7 @@ export default function HomePage() {
           <h2 className="mt-3 font-display text-3xl font-semibold sm:text-4xl">Come hungry. Leave happy.</h2>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link href="/our-menu" className="inline-flex min-h-12 items-center rounded-full bg-[#173d32] px-6 text-sm font-semibold text-white hover:bg-[#245848]">See the menu</Link>
+          <Link href="/service" className="inline-flex min-h-12 items-center rounded-full bg-[#173d32] px-6 text-sm font-semibold text-white hover:bg-[#245848]">Explore Our Services</Link>
           <Link href="/contact" className="inline-flex min-h-12 items-center rounded-full border border-[#cfc5b4] px-6 text-sm font-semibold hover:bg-[#efe8da]">Find us</Link>
         </div>
       </section>

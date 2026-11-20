@@ -220,13 +220,23 @@ public class OrdersController(
 
     [HttpPut("{orderId:int}/items/{itemId:int}")]
     [Authorize(Roles = RoleNames.AdminOrManager)]
-    public async Task<ActionResult<OrderDto>> UpdateItem(int orderId, int itemId, [FromBody] CreateOrderItemRequest request)
+    public async Task<ActionResult<OrderDto>> UpdateItem(int orderId, int itemId, [FromBody] UpdateOrderItemRequest request)
     {
-        var item = await db.OrderItems.FirstOrDefaultAsync(i => i.Id == itemId && i.OrderId == orderId);
+        var order = await db.Orders
+            .Include(current => current.Items)
+            .Include(current => current.Bill)
+            .FirstOrDefaultAsync(current => current.Id == orderId);
+        if (order is null) return NotFound();
+
+        var item = order.Items.FirstOrDefault(current => current.Id == itemId);
         if (item is null) return NotFound();
+        if (item.Status == OrderItemStatus.Cancelled)
+            return BadRequest(new { message = "Cancelled items cannot be edited" });
 
         item.Quantity = Math.Max(1, request.Quantity);
         item.Note = request.Note;
+        if (order.Bill is not null)
+            await RecalculateBillAsync(order);
         await db.SaveChangesAsync();
         await audit.LogAsync(User.GetUserId(), "ORDER_ITEM_EDIT", $"OrderItem {itemId}");
 
@@ -239,10 +249,20 @@ public class OrdersController(
     [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<ActionResult<OrderDto>> CancelItem(int orderId, int itemId)
     {
-        var item = await db.OrderItems.FirstOrDefaultAsync(i => i.Id == itemId && i.OrderId == orderId);
+        var order = await db.Orders
+            .Include(current => current.Items)
+            .Include(current => current.Bill)
+            .FirstOrDefaultAsync(current => current.Id == orderId);
+        if (order is null) return NotFound();
+
+        var item = order.Items.FirstOrDefault(current => current.Id == itemId);
         if (item is null) return NotFound();
+        if (item.Status == OrderItemStatus.Cancelled)
+            return BadRequest(new { message = "Item is already cancelled" });
 
         item.Status = OrderItemStatus.Cancelled;
+        if (order.Bill is not null)
+            await RecalculateBillAsync(order);
         await db.SaveChangesAsync();
         await audit.LogAsync(User.GetUserId(), "ORDER_ITEM_CANCEL", $"OrderItem {itemId} - {item.ItemName}");
 
@@ -267,6 +287,44 @@ public class OrdersController(
             await realtime.KotCreatedAsync(new { type = "ready", itemId, orderId = item.OrderId, item.ItemName });
 
         return Ok(dto);
+    }
+
+    private async Task RecalculateBillAsync(Order order)
+    {
+        var bill = order.Bill!;
+        var activeItems = order.Items.Where(item => item.Status != OrderItemStatus.Cancelled);
+        var subtotal = activeItems.Sum(item => item.UnitPrice * item.Quantity);
+        var discount = bill.DiscountPercent > 0
+            ? Math.Round(subtotal * bill.DiscountPercent / 100m, 2)
+            : Math.Min(bill.DiscountAmount, subtotal);
+        var taxable = Math.Max(0, subtotal - discount) + bill.ServiceCharge;
+        var previousTaxable = bill.Subtotal - bill.DiscountAmount + bill.ServiceCharge;
+
+        decimal cgstRate;
+        decimal sgstRate;
+        if (previousTaxable > 0)
+        {
+            cgstRate = bill.Cgst / previousTaxable;
+            sgstRate = bill.Sgst / previousTaxable;
+        }
+        else
+        {
+            var settings = await db.Settings.FirstAsync();
+            cgstRate = settings.DefaultCgstPercent / 100m;
+            sgstRate = settings.DefaultSgstPercent / 100m;
+        }
+
+        var cgst = Math.Round(taxable * cgstRate, 2);
+        var sgst = Math.Round(taxable * sgstRate, 2);
+        var rawTotal = taxable + cgst + sgst;
+        var total = Math.Round(rawTotal, MidpointRounding.AwayFromZero);
+
+        bill.Subtotal = subtotal;
+        bill.DiscountAmount = discount;
+        bill.Cgst = cgst;
+        bill.Sgst = sgst;
+        bill.RoundOff = total - rawTotal;
+        bill.Total = total;
     }
 
     private async Task<OrderDto?> LoadOrderDto(int orderId)

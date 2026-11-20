@@ -162,10 +162,12 @@ public class StaffAttendance
 {
     public int Id { get; set; }
     public int UserId { get; set; }
+    public string? StaffName { get; set; }
     public DateTime WorkDate { get; set; }
     public string Status { get; set; } = "Absent";
     public DateTime? CheckIn { get; set; }
     public DateTime? CheckOut { get; set; }
+    public DateTime? MarkedAt { get; set; }
     public string? Notes { get; set; }
     public int RecordedByUserId { get; set; }
 

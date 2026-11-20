@@ -2,23 +2,24 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useAuth } from "@/lib/auth";
 
 const links = [
   { href: "/", label: "Home" },
-  { href: "/our-menu", label: "Our menu" },
-  { href: "/story", label: "Our story" },
-  { href: "/contact", label: "Visit us" },
+  { href: "/about", label: "About" },
+  { href: "/service", label: "Service" },
+  { href: "/our-menu", label: "Menu" },
+  { href: "/contact", label: "Contact" },
 ];
 
 export function PublicHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { isManager, logout } = useAuth();
+  const { user, isManager, logout } = useAuth();
   const router = useRouter();
   const navigationLinks = [
-    ...links.slice(1),
+    ...links,
     ...(isManager ? [{ href: "/dashboard", label: "Dashboard" }] : []),
   ];
 
@@ -39,12 +40,22 @@ export function PublicHeader() {
               {link.label}
             </Link>
           ))}
-          <button type="button" onClick={handleLogout} className="whitespace-nowrap rounded-full bg-[#173d32] px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#245848] sm:px-5 sm:text-sm">
-            Sign out
-          </button>
+          {user ? (
+            <button type="button" onClick={handleLogout} className="whitespace-nowrap rounded-full bg-[#173d32] px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#245848] sm:px-5 sm:text-sm">
+              Sign out
+            </button>
+          ) : (
+            <Link href="/login" className="whitespace-nowrap rounded-full bg-[#173d32] px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#245848] sm:px-5 sm:text-sm">
+              Staff sign in
+            </Link>
+          )}
         </nav>
         <div className="flex items-center gap-2 sm:hidden">
-          <button type="button" onClick={handleLogout} className="rounded-full bg-[#173d32] px-3 py-2.5 text-xs font-semibold text-white">Sign out</button>
+          {user ? (
+            <button type="button" onClick={handleLogout} className="rounded-full bg-[#173d32] px-3 py-2.5 text-xs font-semibold text-white">Sign out</button>
+          ) : (
+            <Link href="/login" className="rounded-full bg-[#173d32] px-3 py-2.5 text-xs font-semibold text-white">Staff sign in</Link>
+          )}
           <button
             type="button"
             aria-expanded={menuOpen}
@@ -64,9 +75,15 @@ export function PublicHeader() {
               {link.label}
             </Link>
           ))}
-          <button type="button" onClick={handleLogout} className="rounded-xl px-3 py-3 text-left text-sm font-semibold text-[#42544a] hover:bg-[#efe8da]">
-            Sign out
-          </button>
+          {user ? (
+            <button type="button" onClick={handleLogout} className="rounded-xl px-3 py-3 text-left text-sm font-semibold text-[#42544a] hover:bg-[#efe8da]">
+              Sign out
+            </button>
+          ) : (
+            <Link href="/login" onClick={() => setMenuOpen(false)} className="rounded-xl px-3 py-3 text-sm font-semibold text-[#42544a] hover:bg-[#efe8da]">
+              Staff sign in
+            </Link>
+          )}
         </nav>
       ) : null}
     </header>
@@ -86,9 +103,9 @@ export function PublicFooter() {
           </p>
         </div>
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/75">
-          <Link href="/our-menu" className="hover:text-white">Our menu</Link>
-          <Link href="/story" className="hover:text-white">Our story</Link>
-          <Link href="/contact" className="hover:text-white">Visit us</Link>
+          <Link href="/" className="hover:text-white">Home</Link>
+          <Link href="/about" className="hover:text-white">About</Link>
+          <Link href="/service" className="hover:text-white">Service</Link>
           {isManager ? <Link href="/dashboard" className="hover:text-white">Dashboard</Link> : null}
         </div>
         <p className="text-xs text-white/45 md:col-span-2">© {new Date().getFullYear()} Niyojan Resto</p>
@@ -98,21 +115,6 @@ export function PublicFooter() {
 }
 
 export function PublicPage({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [loading, user, router]);
-
-  if (loading || !user) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-[#fbf8f1] text-sm text-[#657268]">
-        Loading…
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-dvh bg-[#fbf8f1] text-[#21372d]">
       <PublicHeader />

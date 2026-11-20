@@ -106,7 +106,8 @@ public class MenuController(AppDbContext db, IAuditService audit) : ControllerBa
             TaxPercent = request.TaxPercent,
             VegType = request.VegType,
             HasHalfFull = request.HasHalfFull,
-            IsAvailable = request.IsAvailable
+            IsAvailable = request.IsAvailable,
+            ImageUrl = request.ImageUrl
         };
         db.MenuItems.Add(item);
         await db.SaveChangesAsync();
@@ -130,6 +131,7 @@ public class MenuController(AppDbContext db, IAuditService audit) : ControllerBa
         item.VegType = request.VegType;
         item.HasHalfFull = request.HasHalfFull;
         item.IsAvailable = request.IsAvailable;
+        item.ImageUrl = request.ImageUrl;
         await db.SaveChangesAsync();
         await audit.LogAsync(User.GetUserId(), "MENU_UPDATE", item.Name);
         return Ok(item.ToDto());

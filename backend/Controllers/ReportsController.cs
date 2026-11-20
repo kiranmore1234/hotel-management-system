@@ -35,6 +35,35 @@ public class ReportsController(AppDbContext db) : ControllerBase
                 bill.Order.Captain.Name))
             .ToListAsync();
 
+        var orders = await db.Orders
+            .Include(order => order.Table)
+            .Include(order => order.Captain)
+            .Include(order => order.Bill)
+            .Include(order => order.Items)
+            .Where(order => order.CreatedAt >= start && order.CreatedAt < end)
+            .OrderByDescending(order => order.CreatedAt)
+            .Select(order => new SalesReportOrderDto(
+                order.Id,
+                order.OrderNumber,
+                order.Table.TableNo,
+                order.Captain.Name,
+                order.CreatedAt,
+                order.Status.ToString(),
+                order.Bill == null ? null : order.Bill.BillNumber,
+                order.Bill == null ? null : order.Bill.Total,
+                order.Bill == null ? null : order.Bill.PaidAmount,
+                order.Bill == null ? null : order.Bill.PaidAt,
+                order.Items.OrderBy(item => item.Id)
+                    .Select(item => new SalesReportOrderItemDto(
+                        item.Id,
+                        item.ItemName,
+                        item.Quantity,
+                        item.UnitPrice,
+                        item.Note,
+                        item.Status.ToString()))
+                    .ToList()))
+            .ToListAsync();
+
         return Ok(new SalesReportDto(
             from,
             to,
@@ -43,7 +72,8 @@ public class ReportsController(AppDbContext db) : ControllerBase
             bills.Where(bill => bill.PaymentMode is not null)
                 .GroupBy(bill => bill.PaymentMode!)
                 .ToDictionary(group => group.Key, group => group.Sum(bill => bill.Total)),
-            bills));
+            bills,
+            orders));
     }
 }
 
@@ -53,7 +83,8 @@ public record SalesReportDto(
     decimal TotalSales,
     int BillCount,
     Dictionary<string, decimal> SalesByPaymentMode,
-    List<SalesReportBillDto> Bills);
+    List<SalesReportBillDto> Bills,
+    List<SalesReportOrderDto> Orders);
 
 public record SalesReportBillDto(
     string BillNumber,
@@ -63,3 +94,24 @@ public record SalesReportBillDto(
     string OrderNumber,
     string TableNo,
     string CaptainName);
+
+public record SalesReportOrderDto(
+    int Id,
+    string OrderNumber,
+    string TableNo,
+    string CaptainName,
+    DateTime CreatedAt,
+    string Status,
+    string? BillNumber,
+    decimal? BillTotal,
+    decimal? PaidAmount,
+    DateTime? PaidAt,
+    List<SalesReportOrderItemDto> Items);
+
+public record SalesReportOrderItemDto(
+    int Id,
+    string ItemName,
+    int Quantity,
+    decimal UnitPrice,
+    string? Note,
+    string Status);

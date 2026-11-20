@@ -98,6 +98,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<StaffAttendance>(e =>
         {
             e.HasIndex(x => new { x.UserId, x.WorkDate }).IsUnique();
+            e.Property(x => x.StaffName).HasMaxLength(100);
             e.Property(x => x.Status).HasMaxLength(20);
             e.Property(x => x.Notes).HasMaxLength(250);
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
